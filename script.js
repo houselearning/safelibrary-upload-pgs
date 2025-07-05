@@ -4,7 +4,7 @@ function uploadFile() {
   const formData = new FormData();
   formData.append('file', file);
 
-  fetch('https://your-api-server-url/upload', {
+  fetch('https://safelibrary-upload-api.onrender.com/upload', {
     method: 'POST',
     body: formData
   })
