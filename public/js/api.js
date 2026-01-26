@@ -1,5 +1,5 @@
 // api.js (only the dispatchDeploy and helper shown; keep your other Firestore helpers)
-const DEPLOY_ENDPOINT = "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec";
+const DEPLOY_ENDPOINT = "https://script.google.com/macros/s/AKfycbx09yF4Sb41VFexpIa2_yIEyJk_jce4fPShHv0bdB65VCwxctx_1nOWWe90IqJg8qU/exec";
 
 // base64url encode
 function base64UrlEncode(str) {
