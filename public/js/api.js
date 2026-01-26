@@ -2,7 +2,7 @@
 // Requires firebase-init.js (compat SDK) to be loaded first.
 // Update DEPLOY_ENDPOINT with your Apps Script /exec URL.
 
-const DEPLOY_ENDPOINT = "https://script.google.com/macros/s/AKfycbxbwKr6h9ZtpCoZ1t-peCTSgd3WkhiFNKdNFP24D2YeSvGhMIQ9dquiU9OqkDa5_YJM/exec";
+const DEPLOY_ENDPOINT = "https://script.google.com/macros/s/AKfycbwSOcVoOGo6ojKH0rMsARoZldp4kluY90dr-FuTHCCAbyo0MREhAUxYwKo8YnwgnS07/exec";
 
 /* -------------------------
    Utility: safe current user
