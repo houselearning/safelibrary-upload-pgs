@@ -201,7 +201,50 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+async function deploySite(uid, siteId) {
+	// minimal validation
+	if (!uid || !siteId) throw new Error("Missing uid or siteId");
 
+	// Prefer Firebase Functions callable if available (compat SDK)
+	try {
+		if (window.firebase && firebase.functions && typeof firebase.functions === "function") {
+			const fn = firebase.functions().httpsCallable("deploySite");
+			const res = await fn({ uid, siteId });
+			return res.data;
+		}
+	} catch (err) {
+		// fallback to REST if callable fails
+		console.warn("firebase.functions deploySite failed, falling back to REST:", err);
+	}
+
+	// Fallback: POST to absolute /api/deploy with credentials and timeout
+	const url = `${window.location.origin.replace(/\/$/, "")}/api/deploy`;
+	const controller = new AbortController();
+	const timeoutMs = 15000;
+	const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+	let resp;
+	try {
+		resp = await fetch(url, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			credentials: "same-origin",
+			body: JSON.stringify({ uid, siteId }),
+			signal: controller.signal,
+		});
+	} catch (fetchErr) {
+		if (fetchErr.name === "AbortError") throw new Error("Network timeout contacting deploy API");
+		throw new Error("Network error contacting deploy API: " + fetchErr.message);
+	} finally {
+		clearTimeout(timeout);
+	}
+
+	if (!resp.ok) {
+		const text = await resp.text().catch(() => "");
+		throw new Error("Deploy API failed: " + resp.status + " " + text);
+	}
+	return resp.json();
+}
   // Deploy
 // Locate this in your dashboard.js file
 if (deployBtn) {
