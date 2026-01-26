@@ -66,14 +66,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Open a site: set currentSite immediately, then load files
-  async function openSite(site) {
-    try {
-      // Defensive set
-      currentSite = site || null;
-      if (!currentSite || !currentSite.siteId) {
-        alert("Invalid site selected");
-        return;
-      }
+async function openSite(site) {
+  currentSite = site || null;
+  if (!currentSite || !currentSite.siteId) {
+    alert('Invalid site selected');
+    return;
+  }
+  deployBtn.disabled = true;
+  deployStatus.textContent = 'Loading files...';
+  currentFiles = await getSiteFiles(currentUser.uid, currentSite.siteId);
+  renderFileTree();
+  deployBtn.disabled = false;
+  deployStatus.textContent = '';
+}
+
 
       // UI
       treePanel.classList.remove("hidden");
