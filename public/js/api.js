@@ -1,5 +1,31 @@
 // api.js (only the dispatchDeploy and helper shown; keep your other Firestore helpers)
 const DEPLOY_ENDPOINT = "https://script.google.com/macros/s/AKfycbx09yF4Sb41VFexpIa2_yIEyJk_jce4fPShHv0bdB65VCwxctx_1nOWWe90IqJg8qU/exec";
+// api.js — add near the top (after firebase-init.js is loaded)
+async function ensureUserDoc(user) {
+  if (!user || !user.uid) {
+    console.warn('ensureUserDoc called without user');
+    return null;
+  }
+
+  try {
+    const ref = firebase.firestore().collection('users').doc(user.uid);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      const data = {
+        email: user.email || null,
+        displayName: user.displayName || null,
+        siteCount: 0,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      await ref.set(data);
+      return ref;
+    }
+    return ref;
+  } catch (err) {
+    console.error('ensureUserDoc error', err);
+    throw err;
+  }
+}
 
 // base64url encode
 function base64UrlEncode(str) {
