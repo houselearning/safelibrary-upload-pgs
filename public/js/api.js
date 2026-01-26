@@ -109,61 +109,62 @@ function base64UrlEncode(str) {
   return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-function dispatchDeploy(uid, siteId, files) {
-  return new Promise(async (resolve, reject) => {
-    try {
-      if (!auth.currentUser) throw new Error("Not authenticated");
-      const idToken = await auth.currentUser.getIdToken();
+// -------------------------------
+// dispatchDeploy: save files then call JSONP endpoint with tiny payload
+// -------------------------------
+async function dispatchDeploy(uid, siteId, files) {
+  if (!auth.currentUser) throw new Error("Not authenticated");
 
-      // Build small payload. If files are large, consider switching to server-side deploy that reads files from Firestore.
-      const payloadObj = { idToken, uid, siteId, files };
-      const json = JSON.stringify(payloadObj);
-      const encoded = base64UrlEncode(json);
+  // 1) Save files to Firestore so Apps Script can fetch them server-side
+  await saveSiteFiles(uid, siteId, files);
 
-      const callbackName = "hlp_cb_" + Math.random().toString(36).slice(2);
-      const url = `${DEPLOY_ENDPOINT}?callback=${callbackName}&payload=${encodeURIComponent(encoded)}`;
+  // 2) Build tiny payload (idToken, uid, siteId)
+  const idToken = await auth.currentUser.getIdToken();
+  const payloadObj = { idToken, uid, siteId };
+  const json = JSON.stringify(payloadObj);
+  const encoded = base64UrlEncode(json);
 
-      // Timeout in case script fails to load
-      const timeoutMs = 30000;
-      let timedOut = false;
-      const timeoutId = setTimeout(() => {
-        timedOut = true;
-        cleanup();
-        reject(new Error("Deploy timed out"));
-      }, timeoutMs);
+  // 3) JSONP call
+  return new Promise((resolve, reject) => {
+    const callbackName = "hlp_cb_" + Math.random().toString(36).slice(2);
+    const url = `${DEPLOY_ENDPOINT}?callback=${callbackName}&payload=${encodeURIComponent(encoded)}`;
 
-      // Define callback
-      window[callbackName] = function (result) {
-        if (timedOut) return;
-        clearTimeout(timeoutId);
-        cleanup();
-        if (result && result.success) resolve(result);
-        else reject(new Error(result && result.error ? result.error : "Unknown deploy error"));
-      };
+    // timeout
+    const timeoutMs = 30000;
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      cleanup();
+      reject(new Error("Deploy timed out"));
+    }, timeoutMs);
 
-      // Create script tag
-      const script = document.createElement("script");
-      script.src = url;
-      script.id = callbackName;
-      script.onerror = function () {
-        if (timedOut) return;
-        clearTimeout(timeoutId);
-        cleanup();
-        reject(new Error("JSONP script load error"));
-      };
+    // define callback
+    window[callbackName] = function (result) {
+      if (timedOut) return;
+      clearTimeout(timeoutId);
+      cleanup();
+      if (result && result.success) resolve(result);
+      else reject(new Error(result && result.error ? result.error : "Unknown deploy error"));
+    };
 
-      function cleanup() {
-        try {
-          delete window[callbackName];
-        } catch (e) {}
-        const s = document.getElementById(callbackName);
-        if (s) s.remove();
-      }
+    // create script tag
+    const script = document.createElement("script");
+    script.src = url;
+    script.id = callbackName;
+    script.onerror = function () {
+      if (timedOut) return;
+      clearTimeout(timeoutId);
+      cleanup();
+      reject(new Error("JSONP script load error"));
+    };
 
-      document.head.appendChild(script);
-    } catch (err) {
-      reject(err);
+    function cleanup() {
+      try { delete window[callbackName]; } catch (e) {}
+      const s = document.getElementById(callbackName);
+      if (s) s.remove();
     }
+
+    document.head.appendChild(script);
   });
 }
 
