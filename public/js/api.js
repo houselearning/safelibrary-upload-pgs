@@ -100,7 +100,7 @@ async function saveSiteFiles(uid, siteId, files) {
 // ===============================
 
 const DEPLOY_ENDPOINT =
-  "https://script.google.com/macros/s/AKfycbzQU6jIE9gQ008Z-5uMkxUvpEQAMg7tGsXGEQgUh3lR8OBzM-pOJ9qfxwiPRy40j9NE/exec";
+  "https://script.google.com/macros/s/AKfycbx67FyRCChSRh5cv7LtzMQQRCG5ERB6uKzKR6bHKZ9mvQFOWWmZ6c0XWK6V6oCJyLnb/exec";
 
 // Trigger deployment
 async function dispatchDeploy(uid, siteId, files) {
