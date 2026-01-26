@@ -3,6 +3,12 @@ on:
   repository_dispatch:
     types: [deploy-user-site]
 
+# REQUIRED for GitHub Pages
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
@@ -15,6 +21,9 @@ jobs:
         with:
           python-version: '3.9'
 
+      - name: Install Dependencies
+        run: pip install requests  # THIS FIXES THE ERROR IN YOUR LOG
+
       - name: Fetch and Rebuild Site
         env:
           FIREBASE_KEY: ${{ secrets.FIREBASE_API_KEY }}
@@ -24,12 +33,9 @@ jobs:
         run: |
           python - <<EOF
           import os, requests, json
-
-          # 1. Build the Firestore URL
           doc_id = f"{os.environ['USER_UID']}_{os.environ['SITE_ID']}"
           url = f"https://firestore.googleapis.com/v1/projects/{os.environ['PROJECT_ID']}/databases/(default)/documents/siteFiles/{doc_id}?key={os.environ['FIREBASE_KEY']}"
           
-          # 2. Fetch the data
           response = requests.get(url)
           data = response.json()
           
@@ -37,26 +43,18 @@ jobs:
               print("Error: Document not found in Firestore")
               exit(1)
 
-          # 3. Create a public folder for the site
           os.makedirs('public', exist_ok=True)
-
-          # 4. Extract files and write to disk
           files = data['fields']['files']['arrayValue']['values']
           for file_obj in files:
               f = file_obj['mapValue']['fields']
               path = f['path']['stringValue']
               content = f['content']['stringValue']
-              
-              # Ensure subdirectories exist
               os.makedirs(os.path.dirname(os.path.join('public', path)), exist_ok=True)
-              
               with open(os.path.join('public', path), 'w', encoding='utf-8') as f_out:
                   f_out.write(content)
-                  print(f"Created: {path}")
           EOF
 
-      - name: Deploy to GitHub Pages (or Host)
-        # Add your existing deployment step here (e.g., peaceiris/actions-gh-pages)
+      - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
