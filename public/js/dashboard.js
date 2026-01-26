@@ -14,6 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const newFolderBtn = document.getElementById("new-folder-btn");
   const uploadFilesBtn = document.getElementById("upload-files-btn");
   const fileInput = document.getElementById("file-input");
+  const saveFileBtn = document.getElementById("save-file-btn");
 
   // State
   let currentUser = null;
@@ -22,30 +23,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Basic UI safety
   function resetUI() {
-    treePanel.classList.add("hidden");
-    editorPanel.classList.add("hidden");
-    deployBtn.disabled = true;
-    deployStatus.textContent = "";
-    fileTree.innerHTML = "";
+    if (treePanel) treePanel.classList.add("hidden");
+    if (editorPanel) editorPanel.classList.add("hidden");
+    if (deployBtn) deployBtn.disabled = true;
+    if (deployStatus) deployStatus.textContent = "";
+    if (fileTree) fileTree.innerHTML = "";
   }
 
   resetUI();
 
   // Auth observer
   firebase.auth().onAuthStateChanged(async (user) => {
-    if (!user) {
-      window.location.href = "index.html";
-      return;
+    try {
+      if (!user) {
+        window.location.href = "index.html";
+        return;
+      }
+      currentUser = user;
+      // ensureUserDoc should be defined in api.js
+      if (typeof ensureUserDoc === "function") {
+        await ensureUserDoc(user);
+      } else {
+        console.warn("ensureUserDoc not found; continuing");
+      }
+      await loadSites();
+    } catch (err) {
+      console.error("Auth state handler error", err);
     }
-    currentUser = user;
-    await ensureUserDoc(user);
-    await loadSites();
   });
 
   // Load user's sites
   async function loadSites() {
     try {
-      const sites = await getUserSites(currentUser.uid);
+      if (!currentUser || !currentUser.uid) throw new Error("No current user");
+      const sites = typeof getUserSites === "function" ? await getUserSites(currentUser.uid) : [];
       sitesList.innerHTML = "";
       if (!sites || sites.length === 0) {
         const li = document.createElement("li");
@@ -66,46 +77,40 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Open a site: set currentSite immediately, then load files
-async function openSite(site) {
-  currentSite = site || null;
-  if (!currentSite || !currentSite.siteId) {
-    alert('Invalid site selected');
-    return;
-  }
-  deployBtn.disabled = true;
-  deployStatus.textContent = 'Loading files...';
-  currentFiles = await getSiteFiles(currentUser.uid, currentSite.siteId);
-  renderFileTree();
-  deployBtn.disabled = false;
-  deployStatus.textContent = '';
-}
-
+  async function openSite(site) {
+    try {
+      currentSite = site || null;
+      if (!currentSite || !currentSite.siteId) {
+        alert("Invalid site selected");
+        return;
+      }
 
       // UI
-      treePanel.classList.remove("hidden");
-      editorPanel.classList.add("hidden");
-      deployBtn.disabled = true;
-      deployStatus.textContent = "Loading files...";
+      if (treePanel) treePanel.classList.remove("hidden");
+      if (editorPanel) editorPanel.classList.add("hidden");
+      if (deployBtn) deployBtn.disabled = true;
+      if (deployStatus) deployStatus.textContent = "Loading files...";
 
       // Load files
-      currentFiles = await getSiteFiles(currentUser.uid, currentSite.siteId);
+      if (!currentUser || !currentUser.uid) throw new Error("No current user");
+      currentFiles = typeof getSiteFiles === "function" ? await getSiteFiles(currentUser.uid, currentSite.siteId) : [];
       if (!Array.isArray(currentFiles)) currentFiles = [];
 
       renderFileTree();
-      deployBtn.disabled = false;
-      deployStatus.textContent = "";
+      if (deployBtn) deployBtn.disabled = false;
+      if (deployStatus) deployStatus.textContent = "";
     } catch (err) {
       console.error("openSite error", err);
-      deployStatus.textContent = "Failed to load files";
-      deployBtn.disabled = true;
+      if (deployStatus) deployStatus.textContent = "Failed to load files";
+      if (deployBtn) deployBtn.disabled = true;
     }
   }
 
   // Build and render tree
   function buildTree(files) {
     const root = {};
-    files.forEach((f) => {
-      const parts = f.path.split("/").filter(Boolean);
+    (files || []).forEach((f) => {
+      const parts = (f.path || "").split("/").filter(Boolean);
       let node = root;
       parts.forEach((part, idx) => {
         if (!node[part]) {
@@ -152,6 +157,7 @@ async function openSite(site) {
   }
 
   function renderFileTree() {
+    if (!fileTree) return;
     fileTree.innerHTML = "";
     const tree = buildTree(currentFiles);
     renderTree(tree, fileTree, openFileEditor);
@@ -160,83 +166,112 @@ async function openSite(site) {
   // Editor
   function openFileEditor(file) {
     if (!file) return;
-    editorPanel.classList.remove("hidden");
-    editorFilename.textContent = file.path;
-    editorContent.value = file.content || "";
+    if (editorPanel) editorPanel.classList.remove("hidden");
+    if (editorFilename) editorFilename.textContent = file.path;
+    if (editorContent) editorContent.value = file.content || "";
   }
 
   // Save file
-  document.getElementById("save-file-btn").addEventListener("click", async () => {
-    try {
-      const path = editorFilename.textContent;
-      if (!path) {
-        alert("No file selected");
-        return;
+  if (saveFileBtn) {
+    saveFileBtn.addEventListener("click", async () => {
+      try {
+        const path = editorFilename && editorFilename.textContent;
+        if (!path) {
+          alert("No file selected");
+          return;
+        }
+        const content = editorContent && editorContent.value;
+        // Replace or add
+        currentFiles = currentFiles.filter((f) => f.path !== path);
+        currentFiles.push({ path, content, contentType: "text/plain" });
+        if (!currentUser || !currentUser.uid) throw new Error("Not authenticated");
+        if (typeof saveSiteFiles === "function") {
+          await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
+        } else {
+          console.warn("saveSiteFiles not defined; skipping save");
+        }
+        renderFileTree();
+        if (deployStatus) deployStatus.textContent = "Saved";
+        setTimeout(() => {
+          if (deployStatus) deployStatus.textContent = "";
+        }, 1500);
+      } catch (err) {
+        console.error("save file error", err);
+        if (deployStatus) deployStatus.textContent = "Save failed";
       }
-      const content = editorContent.value;
-      // Replace or add
-      currentFiles = currentFiles.filter((f) => f.path !== path);
-      currentFiles.push({ path, content, contentType: "text/plain" });
-      await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
-      renderFileTree();
-      deployStatus.textContent = "Saved";
-      setTimeout(() => (deployStatus.textContent = ""), 1500);
-    } catch (err) {
-      console.error("save file error", err);
-      deployStatus.textContent = "Save failed";
-    }
-  });
+    });
+  }
 
   // Deploy
-  deployBtn.addEventListener("click", async () => {
-    try {
-      if (!auth.currentUser) throw new Error("Not authenticated");
-      if (!currentSite || !currentSite.siteId) {
-        alert("Select a site before deploying.");
-        return;
+  if (deployBtn) {
+    deployBtn.addEventListener("click", async () => {
+      try {
+        const currentAuthUser = (window.auth && window.auth.currentUser) || (firebase && firebase.auth && firebase.auth().currentUser);
+        if (!currentAuthUser) throw new Error("Not authenticated");
+        if (!currentSite || !currentSite.siteId) {
+          alert("Select a site before deploying.");
+          return;
+        }
+        deployBtn.disabled = true;
+        if (deployStatus) deployStatus.textContent = "Deploying...";
+        // Ensure latest files saved
+        if (typeof saveSiteFiles === "function") {
+          await saveSiteFiles(currentAuthUser.uid, currentSite.siteId, currentFiles);
+        }
+        if (typeof dispatchDeploy !== "function") throw new Error("dispatchDeploy not defined");
+        const res = await dispatchDeploy(currentAuthUser.uid, currentSite.siteId, currentFiles);
+        if (deployStatus) deployStatus.textContent = res && res.message ? res.message : "Deployment triggered";
+      } catch (err) {
+        console.error("deploy error", err);
+        if (deployStatus) deployStatus.textContent = err.message || "Deploy failed";
+      } finally {
+        if (deployBtn) deployBtn.disabled = false;
       }
-      deployBtn.disabled = true;
-      deployStatus.textContent = "Deploying...";
-      // Ensure latest files saved
-      await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
-      const res = await dispatchDeploy(currentUser.uid, currentSite.siteId, currentFiles);
-      deployStatus.textContent = res && res.message ? res.message : "Deployment triggered";
-    } catch (err) {
-      console.error("deploy error", err);
-      deployStatus.textContent = err.message || "Deploy failed";
-    } finally {
-      deployBtn.disabled = false;
-    }
-  });
+    });
+  }
 
   // Create site button (simple prompt)
-  createSiteBtn && createSiteBtn.addEventListener("click", async () => {
-    const name = prompt("Site name");
-    if (!name) return;
-    try {
-      const { siteId } = await createSite(currentUser.uid, name);
-      await loadSites();
-      // auto-open new site
-      const sites = await getUserSites(currentUser.uid);
-      const newSite = sites.find((s) => s.siteId === siteId);
-      if (newSite) openSite(newSite);
-    } catch (err) {
-      console.error("create site error", err);
-      alert("Failed to create site: " + err.message);
-    }
-  });
+  if (createSiteBtn) {
+    createSiteBtn.addEventListener("click", async () => {
+      const name = prompt("Site name");
+      if (!name) return;
+      try {
+        if (!currentUser || !currentUser.uid) throw new Error("Not authenticated");
+        if (typeof createSite !== "function") throw new Error("createSite not defined");
+        const { siteId } = await createSite(currentUser.uid, name);
+        await loadSites();
+        // auto-open new site
+        const sites = typeof getUserSites === "function" ? await getUserSites(currentUser.uid) : [];
+        const newSite = sites.find((s) => s.siteId === siteId);
+        if (newSite) openSite(newSite);
+      } catch (err) {
+        console.error("create site error", err);
+        alert("Failed to create site: " + err.message);
+      }
+    });
+  }
 
   // Upload files via file input (simple)
-  fileInput && fileInput.addEventListener("change", async (ev) => {
-    const files = Array.from(ev.target.files || []);
-    for (const f of files) {
-      const relPath = f.webkitRelativePath || f.name;
-      const text = await f.text();
-      // replace or add
-      currentFiles = currentFiles.filter((x) => x.path !== relPath);
-      currentFiles.push({ path: relPath, content: text, contentType: f.type || "application/octet-stream" });
-    }
-    await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
-    renderFileTree();
-  });
+  if (fileInput) {
+    fileInput.addEventListener("change", async (ev) => {
+      try {
+        const files = Array.from(ev.target.files || []);
+        for (const f of files) {
+          const relPath = f.webkitRelativePath || f.name;
+          const text = await f.text();
+          // replace or add
+          currentFiles = currentFiles.filter((x) => x.path !== relPath);
+          currentFiles.push({ path: relPath, content: text, contentType: f.type || "application/octet-stream" });
+        }
+        if (!currentUser || !currentUser.uid) throw new Error("Not authenticated");
+        if (typeof saveSiteFiles === "function") {
+          await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
+        }
+        renderFileTree();
+      } catch (err) {
+        console.error("file upload error", err);
+        if (deployStatus) deployStatus.textContent = "Upload failed";
+      }
+    });
+  }
 });
