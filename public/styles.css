@@ -1,64 +1,63 @@
-body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  margin: 0;
-  background: #f5f5f7;
-}
-
-.container {
-  max-width: 900px;
-  margin: 2rem auto;
-  padding: 1.5rem;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-}
-
-h1, h2, h3 {
-  margin-top: 0;
-}
-
-input, button {
-  font: inherit;
-  padding: 0.5rem 0.75rem;
-  margin: 0.25rem 0;
-}
-
-button {
-  cursor: pointer;
-  border-radius: 6px;
-  border: 1px solid #ccc;
-  background: #0070f3;
-  color: #fff;
-}
-
-button:hover {
-  background: #0059c1;
-}
-
-.error {
-  color: #c00;
-}
-
-.hidden {
-  display: none;
-}
-
-.topbar {
+.dashboard-container {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  height: calc(100vh - 60px);
 }
 
-ul {
+.sites-panel,
+.tree-panel,
+.editor-panel {
+  padding: 1rem;
+  border-right: 1px solid #ddd;
+  overflow-y: auto;
+}
+
+.sites-panel {
+  width: 220px;
+}
+
+.tree-panel {
+  width: 300px;
+}
+
+.editor-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+#editor-content {
+  flex: 1;
+  width: 100%;
+  font-family: monospace;
+  font-size: 14px;
+}
+
+.treeview {
   list-style: none;
   padding-left: 0;
 }
 
-li {
-  padding: 0.25rem 0;
+.treeview .folder {
+  font-weight: bold;
+  cursor: pointer;
 }
 
-.hint {
-  font-size: 0.85rem;
-  color: #555;
+.treeview .file {
+  cursor: pointer;
+  padding-left: 1rem;
+}
+
+.nested {
+  display: none;
+  padding-left: 1rem;
+}
+
+.active {
+  display: block;
+}
+
+.deploy-btn {
+  margin-top: 1rem;
+  background: #2ea44f;
+  color: white;
 }
