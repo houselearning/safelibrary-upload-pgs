@@ -40,7 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       currentUser = user;
-      // ensureUserDoc should be defined in api.js
+      // ensureUserDoc is defined in api.js
       if (typeof ensureUserDoc === "function") {
         await ensureUserDoc(user);
       } else {
@@ -171,7 +171,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (editorContent) editorContent.value = file.content || "";
   }
 
-  // Save file
+  // Save file locally and to Firestore
   if (saveFileBtn) {
     saveFileBtn.addEventListener("click", async () => {
       try {
@@ -181,105 +181,60 @@ document.addEventListener("DOMContentLoaded", () => {
           return;
         }
         const content = editorContent && editorContent.value;
-        // Replace or add
+        // Replace or add in current local state
         currentFiles = currentFiles.filter((f) => f.path !== path);
         currentFiles.push({ path, content, contentType: "text/plain" });
+        
         if (!currentUser || !currentUser.uid) throw new Error("Not authenticated");
+        
         if (typeof saveSiteFiles === "function") {
           await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
+          renderFileTree();
+          if (deployStatus) deployStatus.textContent = "Saved";
+          setTimeout(() => {
+            if (deployStatus) deployStatus.textContent = "";
+          }, 1500);
         } else {
           console.warn("saveSiteFiles not defined; skipping save");
         }
-        renderFileTree();
-        if (deployStatus) deployStatus.textContent = "Saved";
-        setTimeout(() => {
-          if (deployStatus) deployStatus.textContent = "";
-        }, 1500);
       } catch (err) {
         console.error("save file error", err);
         if (deployStatus) deployStatus.textContent = "Save failed";
       }
     });
   }
-async function deploySite(uid, siteId) {
-	// minimal validation
-	if (!uid || !siteId) throw new Error("Missing uid or siteId");
 
-	// Prefer Firebase Functions callable if available (compat SDK)
-	try {
-		if (window.firebase && firebase.functions && typeof firebase.functions === "function") {
-			const fn = firebase.functions().httpsCallable("deploySite");
-			const res = await fn({ uid, siteId });
-			return res.data;
-		}
-	} catch (err) {
-		// fallback to REST if callable fails
-		console.warn("firebase.functions deploySite failed, falling back to REST:", err);
-	}
+  // FIXED DEPLOY BUTTON: Now uses dispatchDeploy from api.js
+  if (deployBtn) {
+    deployBtn.addEventListener("click", async () => {
+      if (!currentSite || !currentUser) {
+        alert("Please select a site first.");
+        return;
+      }
 
-	// Fallback: POST to absolute /api/deploy with credentials and timeout
-	const url = `${window.location.origin.replace(/\/$/, "")}/api/deploy`;
-	const controller = new AbortController();
-	const timeoutMs = 15000;
-	const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      console.log("--- DEPLOY START ---");
+      console.log("Site Name:", currentSite.name);
+      console.log("Site ID:", currentSite.siteId);
 
-	let resp;
-	try {
-		resp = await fetch(url, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			credentials: "same-origin",
-			body: JSON.stringify({ uid, siteId }),
-			signal: controller.signal,
-		});
-	} catch (fetchErr) {
-		if (fetchErr.name === "AbortError") throw new Error("Network timeout contacting deploy API");
-		throw new Error("Network error contacting deploy API: " + fetchErr.message);
-	} finally {
-		clearTimeout(timeout);
-	}
+      try {
+        deployStatus.textContent = "Deploying...";
+        deployBtn.disabled = true;
 
-	if (!resp.ok) {
-		const text = await resp.text().catch(() => "");
-		throw new Error("Deploy API failed: " + resp.status + " " + text);
-	}
-	return resp.json();
-}
-  // Deploy
-// Locate this in your dashboard.js file
-if (deployBtn) {
-  deployBtn.addEventListener("click", async () => {
-    // 1. Safety Check: Ensure a site is selected and user is logged in
-    if (!currentSite || !currentUser) {
-      alert("Please select a site first.");
-      return;
-    }
+        // Uses the function in api.js which handles the Apps Script connection [cite: 5]
+        const result = await dispatchDeploy(currentUser.uid, currentSite.siteId, currentFiles);
+        
+        console.log("Deploy Success:", result);
+        deployStatus.textContent = "Deployed successfully!";
+      } catch (err) {
+        console.error("Deploy Error:", err);
+        deployStatus.textContent = "Deploy failed: " + err.message;
+      } finally {
+        deployBtn.disabled = false;
+      }
+    });
+  }
 
-    // 2. DEBUG LOG: Check if the ID is the random string or the name "firstsite"
-    console.log("--- DEPLOY START ---");
-    console.log("Site Name:", currentSite.name);
-    console.log("Site ID (used for Firestore):", currentSite.siteId);
-    console.log("User UID:", currentUser.uid);
-
-    try {
-      deployStatus.textContent = "Deploying...";
-      deployBtn.disabled = true;
-
-      // 3. Call the API helper
-      const result = await deploySite(currentUser.uid, currentSite.siteId);
-      
-      console.log("Deploy Success:", result);
-      deployStatus.textContent = "Deployed successfully!";
-    } catch (err) {
-      console.error("Deploy Error:", err);
-      deployStatus.textContent = "Deploy failed: " + err.message;
-    } finally {
-      deployBtn.disabled = false;
-    }
-  });
-}
-
-  // Create site button (simple prompt)
+  // Create site button
   if (createSiteBtn) {
     createSiteBtn.addEventListener("click", async () => {
       const name = prompt("Site name");
@@ -289,7 +244,7 @@ if (deployBtn) {
         if (typeof createSite !== "function") throw new Error("createSite not defined");
         const { siteId } = await createSite(currentUser.uid, name);
         await loadSites();
-        // auto-open new site
+        // Auto-open new site
         const sites = typeof getUserSites === "function" ? await getUserSites(currentUser.uid) : [];
         const newSite = sites.find((s) => s.siteId === siteId);
         if (newSite) openSite(newSite);
@@ -300,7 +255,7 @@ if (deployBtn) {
     });
   }
 
-  // Upload files via file input (simple)
+  // Upload files
   if (fileInput) {
     fileInput.addEventListener("change", async (ev) => {
       try {
@@ -308,7 +263,6 @@ if (deployBtn) {
         for (const f of files) {
           const relPath = f.webkitRelativePath || f.name;
           const text = await f.text();
-          // replace or add
           currentFiles = currentFiles.filter((x) => x.path !== relPath);
           currentFiles.push({ path: relPath, content: text, contentType: f.type || "application/octet-stream" });
         }
