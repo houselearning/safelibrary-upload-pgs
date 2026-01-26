@@ -1,7 +1,7 @@
 // api.js — Firestore + deploy helpers
 // Requires firebase-init.js to be loaded first
 
-const DEPLOY_ENDPOINT = "https://script.google.com/macros/s/AKfycbzOTXm323qY2smxIKAEmiTL8YcyEo6gDnzlJZCZOunb5FPo83PSeVqED_09RkVjs6HN/exec";
+const DEPLOY_ENDPOINT = "https://script.google.com/macros/s/AKfycbz3BhLb2gndIvCpCiQYdrDwLu4KzLbXB5_BwxbgTjoaxqkWBKG1acB5eAKi_RnXKrIi/exec";
 
 /* -------------------------
    Auth helper
