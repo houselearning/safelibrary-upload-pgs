@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard – HouseLearning Pages</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore-compat.js"></script>
+  <script defer src="js/firebase-init.js"></script>
+  <script defer src="js/api.js"></script>
+  <script defer src="js/dashboard.js"></script>
+</head>
+<body>
+  <main class="container">
+    <header class="topbar">
+      <h1>Your Sites</h1>
+      <div>
+        <span id="user-email"></span>
+        <button id="logout-btn">Sign out</button>
+      </div>
+    </header>
+
+    <section id="sites-section">
+      <button id="create-site-btn">Create new site</button>
+      <p id="site-limit-msg" class="error hidden">You’ve reached the maximum of 5 sites.</p>
+      <ul id="sites-list"></ul>
+    </section>
+
+    <section id="site-editor" class="hidden">
+      <h2 id="site-title"></h2>
+      <p>Site ID: <span id="site-id"></span></p>
+      <p>Preview URL: <code id="site-url"></code></p>
+
+      <h3>Files</h3>
+      <input type="file" id="file-input" multiple />
+      <button id="upload-files-btn">Upload files</button>
+      <p class="hint">Make sure you include an <code>index.html</code> at the root.</p>
+
+      <ul id="files-list"></ul>
+
+      <button id="deploy-btn">Deploy</button>
+      <p id="deploy-status"></p>
+    </section>
+  </main>
+</body>
+</html>
