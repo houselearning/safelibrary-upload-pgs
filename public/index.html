@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>HouseLearning Pages</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore-compat.js"></script>
+  <script defer src="js/firebase-init.js"></script>
+  <script defer src="js/auth.js"></script>
+</head>
+<body>
+  <main class="container">
+    <h1>HouseLearning Pages</h1>
+    <p>Spin up static sites under <code>pages.houselearning.org</code> for free.</p>
+
+    <section id="auth-section">
+      <div id="user-info" class="hidden">
+        <p>Signed in as <span id="user-email"></span></p>
+        <button id="go-dashboard">Go to Dashboard</button>
+        <button id="logout-btn">Sign out</button>
+      </div>
+
+      <div id="login-form">
+        <h2>Sign in / Sign up</h2>
+        <input type="email" id="email" placeholder="Email" />
+        <input type="password" id="password" placeholder="Password" />
+        <button id="login-btn">Continue</button>
+        <p id="auth-error" class="error"></p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
