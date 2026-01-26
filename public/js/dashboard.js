@@ -1,127 +1,79 @@
-document.addEventListener('DOMContentLoaded', () => {
-  const userEmailSpan = document.getElementById('user-email');
-  const logoutBtn = document.getElementById('logout-btn');
-  const createSiteBtn = document.getElementById('create-site-btn');
-  const siteLimitMsg = document.getElementById('site-limit-msg');
-  const sitesList = document.getElementById('sites-list');
-
-  const siteEditor = document.getElementById('site-editor');
-  const siteTitle = document.getElementById('site-title');
-  const siteIdSpan = document.getElementById('site-id');
-  const siteUrlCode = document.getElementById('site-url');
-  const fileInput = document.getElementById('file-input');
-  const uploadFilesBtn = document.getElementById('upload-files-btn');
-  const filesList = document.getElementById('files-list');
-  const deployBtn = document.getElementById('deploy-btn');
-  const deployStatus = document.getElementById('deploy-status');
+document.addEventListener("DOMContentLoaded", () => {
+  const sitesList = document.getElementById("sites-list");
+  const treePanel = document.getElementById("tree-panel");
+  const fileTree = document.getElementById("file-tree");
+  const editorPanel = document.getElementById("editor-panel");
+  const editorFilename = document.getElementById("editor-filename");
+  const editorContent = document.getElementById("editor-content");
 
   let currentUser = null;
   let currentSite = null;
   let currentFiles = [];
 
-  auth.onAuthStateChanged(async (user) => {
-    if (!user) {
-      window.location.href = 'index.html';
-      return;
-    }
+  auth.onAuthStateChanged(async user => {
+    if (!user) return (window.location.href = "index.html");
     currentUser = user;
-    userEmailSpan.textContent = user.email || user.uid;
+    document.getElementById("user-email").textContent = user.email;
     await ensureUserDoc(user);
-    await loadSites();
+    loadSites();
   });
 
-  logoutBtn.addEventListener('click', () => auth.signOut());
-
   async function loadSites() {
-    sitesList.innerHTML = '';
     const sites = await getUserSites(currentUser.uid);
-    if (sites.length >= 5) {
-      siteLimitMsg.classList.remove('hidden');
-    } else {
-      siteLimitMsg.classList.add('hidden');
-    }
+    sitesList.innerHTML = "";
 
     sites.forEach(site => {
-      const li = document.createElement('li');
-      li.textContent = `${site.name} (${site.slug})`;
-      li.style.cursor = 'pointer';
-      li.addEventListener('click', () => openSite(site));
+      const li = document.createElement("li");
+      li.textContent = site.name;
+      li.onclick = () => openSite(site);
       sitesList.appendChild(li);
     });
   }
 
-  createSiteBtn.addEventListener('click', async () => {
-    const name = prompt('Site name:');
-    if (!name) return;
-    try {
-      const { siteId, siteDocId, slug } = await createSite(currentUser.uid, name);
-      await loadSites();
-      const site = {
-        uid: currentUser.uid,
-        siteId,
-        name,
-        slug,
-        id: siteDocId,
-      };
-      openSite(site);
-    } catch (err) {
-      alert(err.message);
-    }
-  });
-
   async function openSite(site) {
     currentSite = site;
-    siteEditor.classList.remove('hidden');
-    siteTitle.textContent = site.name;
-    siteIdSpan.textContent = site.siteId;
-    const url = `${window.location.origin}/sites/${currentUser.uid}/${site.siteId}/`;
-    siteUrlCode.textContent = url;
+    treePanel.classList.remove("hidden");
+
+    document.getElementById("site-title").textContent = site.name;
+    document.getElementById("site-url").textContent =
+      `${window.location.origin}/sites/${currentUser.uid}/${site.siteId}/`;
 
     currentFiles = await getSiteFiles(currentUser.uid, site.siteId);
-    renderFiles();
+
+    renderFileTree();
   }
 
-  function renderFiles() {
-    filesList.innerHTML = '';
-    currentFiles.forEach(f => {
-      const li = document.createElement('li');
-      li.textContent = f.path;
-      filesList.appendChild(li);
-    });
+  function renderFileTree() {
+    fileTree.innerHTML = "";
+    const tree = buildTree(currentFiles);
+    renderTree(tree, fileTree, openFileEditor);
   }
 
-  uploadFilesBtn.addEventListener('click', async () => {
-    const files = Array.from(fileInput.files || []);
-    if (!files.length) return;
+  function openFileEditor(file) {
+    editorPanel.classList.remove("hidden");
+    editorFilename.textContent = file.path;
+    editorContent.value = file.content;
+  }
 
-    for (const file of files) {
-      const text = await file.text();
-      const path = file.webkitRelativePath || file.name;
-      currentFiles = currentFiles.filter(f => f.path !== path);
-      currentFiles.push({
-        path,
-        content: text,
-        contentType: file.type || 'text/plain',
-      });
-    }
+  document.getElementById("save-file-btn").onclick = async () => {
+    const path = editorFilename.textContent;
+    const content = editorContent.value;
+
+    currentFiles = currentFiles.filter(f => f.path !== path);
+    currentFiles.push({ path, content, contentType: "text/plain" });
 
     await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
-    renderFiles();
-    fileInput.value = '';
-  });
+    renderFileTree();
+  };
 
-  deployBtn.addEventListener('click', async () => {
-    deployStatus.textContent = 'Deploying...';
+  document.getElementById("deploy-btn").onclick = async () => {
+    document.getElementById("deploy-status").textContent = "Deploying...";
     try {
-      const files = await getSiteFiles(currentUser.uid, currentSite.siteId);
-      if (!files.length) {
-        deployStatus.textContent = 'No files to deploy.';
-        return;
-      }
-      await dispatchDeploy(currentUser.uid, currentSite.siteId, files);
-      deployStatus.textContent = 'Deployment triggered. GitHub Pages will update shortly.';
+      await dispatchDeploy(currentUser.uid, currentSite.siteId, currentFiles);
+      document.getElementById("deploy-status").textContent =
+        "Deployment triggered!";
     } catch (err) {
-      deployStatus.textContent = `Error: ${err.message}`;
+      document.getElementById("deploy-status").textContent = err.message;
     }
-  });
+  };
 });
