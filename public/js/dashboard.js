@@ -203,32 +203,38 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Deploy
-  if (deployBtn) {
-    deployBtn.addEventListener("click", async () => {
-      try {
-        const currentAuthUser = (window.auth && window.auth.currentUser) || (firebase && firebase.auth && firebase.auth().currentUser);
-        if (!currentAuthUser) throw new Error("Not authenticated");
-        if (!currentSite || !currentSite.siteId) {
-          alert("Select a site before deploying.");
-          return;
-        }
-        deployBtn.disabled = true;
-        if (deployStatus) deployStatus.textContent = "Deploying...";
-        // Ensure latest files saved
-        if (typeof saveSiteFiles === "function") {
-          await saveSiteFiles(currentAuthUser.uid, currentSite.siteId, currentFiles);
-        }
-        if (typeof dispatchDeploy !== "function") throw new Error("dispatchDeploy not defined");
-        const res = await dispatchDeploy(currentAuthUser.uid, currentSite.siteId, currentFiles);
-        if (deployStatus) deployStatus.textContent = res && res.message ? res.message : "Deployment triggered";
-      } catch (err) {
-        console.error("deploy error", err);
-        if (deployStatus) deployStatus.textContent = err.message || "Deploy failed";
-      } finally {
-        if (deployBtn) deployBtn.disabled = false;
-      }
-    });
-  }
+// Locate this in your dashboard.js file
+if (deployBtn) {
+  deployBtn.addEventListener("click", async () => {
+    // 1. Safety Check: Ensure a site is selected and user is logged in
+    if (!currentSite || !currentUser) {
+      alert("Please select a site first.");
+      return;
+    }
+
+    // 2. DEBUG LOG: Check if the ID is the random string or the name "firstsite"
+    console.log("--- DEPLOY START ---");
+    console.log("Site Name:", currentSite.name);
+    console.log("Site ID (used for Firestore):", currentSite.siteId);
+    console.log("User UID:", currentUser.uid);
+
+    try {
+      deployStatus.textContent = "Deploying...";
+      deployBtn.disabled = true;
+
+      // 3. Call the API helper
+      const result = await deploySite(currentUser.uid, currentSite.siteId);
+      
+      console.log("Deploy Success:", result);
+      deployStatus.textContent = "Deployed successfully!";
+    } catch (err) {
+      console.error("Deploy Error:", err);
+      deployStatus.textContent = "Deploy failed: " + err.message;
+    } finally {
+      deployBtn.disabled = false;
+    }
+  });
+}
 
   // Create site button (simple prompt)
   if (createSiteBtn) {
