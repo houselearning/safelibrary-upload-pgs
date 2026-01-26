@@ -4,44 +4,61 @@
   <meta charset="UTF-8" />
   <title>Dashboard – HouseLearning Pages</title>
   <link rel="stylesheet" href="styles.css" />
+
+  <!-- Firebase -->
   <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore-compat.js"></script>
+
+  <!-- Your scripts -->
   <script defer src="js/firebase-init.js"></script>
   <script defer src="js/api.js"></script>
+  <script defer src="js/treeview.js"></script>
   <script defer src="js/dashboard.js"></script>
 </head>
+
 <body>
-  <main class="container">
-    <header class="topbar">
-      <h1>Your Sites</h1>
-      <div>
-        <span id="user-email"></span>
-        <button id="logout-btn">Sign out</button>
-      </div>
-    </header>
+  <header class="topbar">
+    <h1>HouseLearning Pages</h1>
+    <div>
+      <span id="user-email"></span>
+      <button id="logout-btn">Sign out</button>
+    </div>
+  </header>
 
-    <section id="sites-section">
-      <button id="create-site-btn">Create new site</button>
-      <p id="site-limit-msg" class="error hidden">You’ve reached the maximum of 5 sites.</p>
+  <main class="dashboard-container">
+
+    <!-- Left: Sites list -->
+    <aside class="sites-panel">
+      <h2>Your Sites</h2>
+      <button id="create-site-btn">New Site</button>
       <ul id="sites-list"></ul>
-    </section>
+    </aside>
 
-    <section id="site-editor" class="hidden">
+    <!-- Middle: File tree -->
+    <aside class="tree-panel hidden" id="tree-panel">
       <h2 id="site-title"></h2>
-      <p>Site ID: <span id="site-id"></span></p>
-      <p>Preview URL: <code id="site-url"></code></p>
+      <p class="site-url">URL: <code id="site-url"></code></p>
 
-      <h3>Files</h3>
-      <input type="file" id="file-input" multiple />
-      <button id="upload-files-btn">Upload files</button>
-      <p class="hint">Make sure you include an <code>index.html</code> at the root.</p>
+      <div class="tree-actions">
+        <button id="new-folder-btn">New Folder</button>
+        <button id="upload-files-btn">Upload Files</button>
+        <input type="file" id="file-input" multiple webkitdirectory directory />
+      </div>
 
-      <ul id="files-list"></ul>
+      <ul id="file-tree" class="treeview"></ul>
 
-      <button id="deploy-btn">Deploy</button>
+      <button id="deploy-btn" class="deploy-btn">Deploy Site</button>
       <p id="deploy-status"></p>
+    </aside>
+
+    <!-- Right: File editor -->
+    <section class="editor-panel hidden" id="editor-panel">
+      <h2 id="editor-filename"></h2>
+      <textarea id="editor-content"></textarea>
+      <button id="save-file-btn">Save</button>
     </section>
+
   </main>
 </body>
 </html>
