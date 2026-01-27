@@ -3,6 +3,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const sitesList = document.getElementById("sites-list");
   const treePanel = document.getElementById("tree-panel");
   const fileTree = document.getElementById("file-tree");
+  const treeRootDrop = document.getElementById("tree-root-drop");
   const editorPanel = document.getElementById("editor-panel");
   const editorFilename = document.getElementById("editor-filename");
   const editorContent = document.getElementById("editor-content");
@@ -14,10 +15,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const saveAllBtn = document.getElementById("save-all-btn");
   const uploadFilesBtn = document.getElementById("upload-files-btn");
   const uploadFolderBtn = document.getElementById("upload-folder-btn");
-  
   const progressContainer = document.getElementById("progress-container");
   const progressBar = document.getElementById("progress-bar");
-
   const settingsBtn = document.getElementById("settings-btn");
   const settingsModal = document.getElementById("settings-modal");
   const closeModal = document.getElementById("close-modal");
@@ -25,7 +24,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const saveSlugBtn = document.getElementById("save-slug-btn");
   const slugStatus = document.getElementById("slug-status");
   const deleteSiteBtn = document.getElementById("delete-site-btn");
-
   const contextMenu = document.getElementById("context-menu");
   const deleteTreeItem = document.getElementById("delete-tree-item");
 
@@ -34,6 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentFiles = [];
   let rightClickedItem = null;
 
+  // --- AUTH & INITIALIZATION ---
   firebase.auth().onAuthStateChanged(async (user) => {
     if (!user) { window.location.href = "index.html"; return; }
     currentUser = user;
@@ -67,11 +66,11 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("site-url").textContent = `pages.houselearning.org/${displayId}/`;
   }
 
-  // --- SAVE ALL LOGIC ---
-  saveAllBtn.onclick = async () => {
+  // --- SAVE ALL LOGIC (With Textbox Sync) ---
+  const performSaveAll = async () => {
     if (!currentSite) return;
 
-    // 1. Update the local currentFiles array with whatever is currently in the editor
+    // Sync editor content into the array
     const openFilePath = editorFilename.textContent;
     if (openFilePath && !editorPanel.classList.contains("hidden")) {
       const fileIndex = currentFiles.findIndex(f => f.path === openFilePath);
@@ -80,8 +79,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    // 2. Save the entire updated array to the database
-    deployStatus.textContent = "Saving all changes...";
+    deployStatus.textContent = "Saving all files...";
     if (await saveCurrentWebsite()) {
       deployStatus.textContent = "All changes saved!";
       renderFileTree();
@@ -90,14 +88,24 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  // --- CONTEXT MENU LOGIC ---
+  saveAllBtn.onclick = performSaveAll;
+
+  // Keyboard shortcut Ctrl+S
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      performSaveAll();
+    }
+  });
+
+  // --- CONTEXT MENU & DELETION ---
   window.addEventListener("click", () => { contextMenu.style.display = "none"; });
 
   deleteTreeItem.onclick = async () => {
     if (!rightClickedItem || !currentSite) return;
     const { path, isFile } = rightClickedItem;
     
-    if (confirm(`Delete ${path}?`)) {
+    if (confirm(`Are you sure you want to delete ${path}?`)) {
       if (isFile) {
         currentFiles = currentFiles.filter(f => f.path !== path);
       } else {
@@ -109,7 +117,41 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  // --- UPLOAD LOGIC ---
+  // --- DRAG & DROP LOGIC ---
+  async function moveItem(oldPath, targetFolder, isFile) {
+    const fileName = oldPath.split('/').pop();
+    // If target folder is empty string (root), path is just fileName
+    const newPath = targetFolder ? `${targetFolder}/${fileName}` : fileName;
+
+    if (newPath === oldPath) return;
+
+    if (isFile) {
+      currentFiles = currentFiles.map(f => f.path === oldPath ? { ...f, path: newPath } : f);
+    } else {
+      const oldPrefix = oldPath + "/";
+      const newPrefix = newPath + "/";
+      currentFiles = currentFiles.map(f => {
+        if (f.path === oldPath) return { ...f, path: newPath };
+        if (f.path.startsWith(oldPrefix)) return { ...f, path: f.path.replace(oldPrefix, newPrefix) };
+        return f;
+      });
+    }
+
+    renderFileTree();
+    await saveCurrentWebsite();
+  }
+
+  // Root drop target setup
+  treeRootDrop.ondragover = (e) => { e.preventDefault(); treeRootDrop.classList.add("drag-over"); };
+  treeRootDrop.ondragleave = () => treeRootDrop.classList.remove("drag-over");
+  treeRootDrop.ondrop = (e) => {
+    e.preventDefault();
+    treeRootDrop.classList.remove("drag-over");
+    const data = JSON.parse(e.dataTransfer.getData("application/json"));
+    moveItem(data.path, "", data.isFile);
+  };
+
+  // --- UPLOAD HANDLERS ---
   uploadFilesBtn.onclick = () => fileInput.click();
   uploadFolderBtn.onclick = () => folderInput.click();
 
@@ -120,7 +162,6 @@ document.addEventListener("DOMContentLoaded", () => {
     progressContainer.style.display = "block";
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
-      // Use webkitRelativePath for folders, name for individual files
       const relPath = f.webkitRelativePath || f.name;
       const text = await f.text();
       currentFiles = currentFiles.filter(x => x.path !== relPath);
@@ -130,7 +171,6 @@ document.addEventListener("DOMContentLoaded", () => {
       progressBar.style.width = percent + "%";
       progressBar.textContent = Math.round(percent) + "%";
     }
-    
     await saveCurrentWebsite();
     renderFileTree();
     setTimeout(() => { progressContainer.style.display = "none"; }, 1000);
@@ -148,29 +188,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return false;
   }
 
-  // --- REMAINING HELPERS (UNCHANGED) ---
-  saveFileBtn.onclick = async () => {
-    const path = editorFilename.textContent;
-    if (path) {
-      currentFiles = currentFiles.filter(f => f.path !== path);
-      currentFiles.push({ path, content: editorContent.value, contentType: "text/plain" });
-    }
-    if (await saveCurrentWebsite()) {
-      deployStatus.textContent = "Saved!";
-      renderFileTree();
-    }
-  };
-
-  deployBtn.onclick = async () => {
-    deployBtn.disabled = true;
-    deployStatus.textContent = "Deploying...";
-    await saveCurrentWebsite();
-    await dispatchDeploy(currentUser.uid, currentSite.siteId, currentFiles);
-    const displayId = currentSite.customSlug || currentSite.siteId;
-    deployStatus.innerHTML = `Deployed! <a href="https://pages.houselearning.org/${displayId}/" target="_blank">View</a>`;
-    deployBtn.disabled = false;
-  };
-
+  // --- TREE VIEW RENDERING ---
   function renderFileTree() {
     fileTree.innerHTML = "";
     const tree = buildTree(currentFiles);
@@ -200,6 +218,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const li = document.createElement("li");
       const fullPath = currentPath ? `${currentPath}/${name}` : name;
       li.style.cursor = "pointer";
+      li.setAttribute("draggable", "true");
 
       if (item.__isFile) {
         li.textContent = name;
@@ -209,7 +228,26 @@ document.addEventListener("DOMContentLoaded", () => {
         const ul = document.createElement("ul");
         renderTree(item.children, ul, onFileClick, fullPath);
         li.appendChild(ul);
+
+        // Folders are drop targets
+        li.ondragover = (e) => { e.preventDefault(); e.stopPropagation(); li.classList.add("drag-over"); };
+        li.ondragleave = () => li.classList.remove("drag-over");
+        li.ondrop = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          li.classList.remove("drag-over");
+          const data = JSON.parse(e.dataTransfer.getData("application/json"));
+          if (fullPath.startsWith(data.path)) return alert("Cannot move folder into itself.");
+          moveItem(data.path, fullPath, data.isFile);
+        };
       }
+
+      li.ondragstart = (e) => {
+        e.stopPropagation();
+        e.dataTransfer.setData("application/json", JSON.stringify({ path: fullPath, isFile: item.__isFile }));
+        li.style.opacity = "0.5";
+      };
+      li.ondragend = () => li.style.opacity = "1";
 
       li.oncontextmenu = (e) => {
         e.preventDefault();
@@ -219,13 +257,23 @@ document.addEventListener("DOMContentLoaded", () => {
         contextMenu.style.left = e.pageX + "px";
         contextMenu.style.top = e.pageY + "px";
       };
+
       parentEl.appendChild(li);
     });
   }
 
-  // --- SETTINGS (UNCHANGED) ---
+  // --- BUTTON ACTIONS ---
+  saveFileBtn.onclick = performSaveAll;
+  deployBtn.onclick = async () => {
+    deployBtn.disabled = true;
+    deployStatus.textContent = "Deploying...";
+    await performSaveAll();
+    await dispatchDeploy(currentUser.uid, currentSite.siteId, currentFiles);
+    const displayId = currentSite.customSlug || currentSite.siteId;
+    deployStatus.innerHTML = `Deployed! <a href="https://pages.houselearning.org/${displayId}/" target="_blank">View</a>`;
+    deployBtn.disabled = false;
+  };
+
   settingsBtn.onclick = () => { settingsModal.style.display = "block"; renameSlugInput.value = currentSite.customSlug || ""; };
   closeModal.onclick = () => settingsModal.style.display = "none";
-  saveSlugBtn.onclick = async () => { /* ... slug logic ... */ };
-  deleteSiteBtn.onclick = async () => { /* ... delete logic ... */ };
 });
