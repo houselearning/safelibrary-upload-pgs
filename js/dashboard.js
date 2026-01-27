@@ -28,11 +28,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const deleteTreeItem = document.getElementById("delete-tree-item");
   const renameTreeItem = document.getElementById("rename-tree-item");
 
+  // --- Icon UI Elements ---
+  const iconInput = document.getElementById("icon-input");
+  const saveIconBtn = document.getElementById("save-icon-btn");
+  const iconStatus = document.getElementById("icon-status");
+  const clearIconBtn = document.getElementById("clear-icon-btn");
+
   // --- State Variables ---
   let currentUser = null;
   let currentSite = null;
   let currentFiles = [];
   let rightClickedItem = null;
+  let pendingIcon = null;
 
   // --- Authentication ---
   firebase.auth().onAuthStateChanged(async (user) => {
@@ -85,7 +92,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const performSaveAll = async () => {
     if (!currentSite) return;
 
-    // Sync editor content into the currentFiles array before saving to DB
     const openFilePath = editorFilename.textContent;
     if (openFilePath && !editorPanel.classList.contains("hidden")) {
       const fileIndex = currentFiles.findIndex(f => f.path === openFilePath);
@@ -114,12 +120,65 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // --- Context Menu Actions (Rename & Delete) ---
+  // --- Icon Settings Logic ---
+  iconInput.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      pendingIcon = {
+        path: "favicon.ico",
+        content: event.target.result,
+        contentType: file.type
+      };
+      saveIconBtn.disabled = false;
+      iconStatus.textContent = `Ready to save: ${file.name}`;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  saveIconBtn.onclick = async () => {
+    if (!pendingIcon || !currentSite) return;
+
+    // Filter out existing icon and add the new one
+    currentFiles = currentFiles.filter(f => f.path !== "favicon.ico");
+    currentFiles.push(pendingIcon);
+
+    if (await saveCurrentWebsite()) {
+      saveIconBtn.disabled = true;
+      iconStatus.textContent = "Icon updated! It will be live after your next deploy.";
+      clearIconBtn.style.display = "inline-block";
+      pendingIcon = null;
+      renderFileTree();
+    }
+  };
+
+  clearIconBtn.onclick = async () => {
+    if (!confirm("Are you sure you want to remove the website icon and revert to the browser default?")) return;
+
+    currentFiles = currentFiles.filter(f => f.path !== "favicon.ico");
+    if (await saveCurrentWebsite()) {
+      clearIconBtn.style.display = "none";
+      iconStatus.textContent = "Icon removed. Deploy to apply changes.";
+      iconInput.value = "";
+      renderFileTree();
+    }
+  };
+
+  // --- Context Menu Actions ---
   window.addEventListener("click", () => { contextMenu.style.display = "none"; });
 
   renameTreeItem.onclick = async () => {
     if (!rightClickedItem || !currentSite) return;
     const { path, isFile } = rightClickedItem;
+
+    // Prevention: Cannot rename favicon.ico as it breaks the deployment logic
+    if (path === "favicon.ico") {
+      alert("The website icon (favicon.ico) cannot be renamed.");
+      return;
+    }
+
     const parts = path.split('/');
     const oldName = parts.pop();
     const parentPath = parts.join('/');
@@ -148,6 +207,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!rightClickedItem || !currentSite) return;
     const { path, isFile } = rightClickedItem;
     
+    // REQUIREMENT: Must use Settings to delete favicon.ico
+    if (path === "favicon.ico") {
+      alert("To delete the website icon, please use the 'Clear Icon' button in the Site Settings modal.");
+      return;
+    }
+
     if (confirm(`Are you sure you want to delete ${path}?`)) {
       if (isFile) {
         currentFiles = currentFiles.filter(f => f.path !== path);
@@ -198,65 +263,51 @@ document.addEventListener("DOMContentLoaded", () => {
   if (uploadFolderBtn) uploadFolderBtn.onclick = () => folderInput.click();
 
   async function handleUpload(ev) {
-  const files = Array.from(ev.target.files || []);
-  if (files.length === 0) return;
+    const files = Array.from(ev.target.files || []);
+    if (files.length === 0) return;
 
-  progressContainer.style.display = "block";
+    progressContainer.style.display = "block";
 
-  // We use a Promise.all to wait for all files to be read before saving
-  const uploadPromises = files.map((f, i) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
+    const uploadPromises = files.map((f, i) => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
 
-      reader.onload = async (e) => {
-        const content = e.target.result;
-        // The webkitRelativePath preserves folder structure for "Upload Folder"
-        // If it's an individual file upload, it defaults to just the file name
-        const relPath = f.webkitRelativePath || f.name;
+        reader.onload = async (e) => {
+          const content = e.target.result;
+          const relPath = f.webkitRelativePath || f.name;
 
-        // Update local state: remove if exists, then add new version
-        currentFiles = currentFiles.filter((x) => x.path !== relPath);
-        currentFiles.push({
-          path: relPath,
-          content: content, // This is now safe Base64 for images or Text for code
-          contentType: f.type || "text/plain",
-        });
+          currentFiles = currentFiles.filter((x) => x.path !== relPath);
+          currentFiles.push({
+            path: relPath,
+            content: content,
+            contentType: f.type || "text/plain",
+          });
 
-        // Update progress bar
-        const percent = ((i + 1) / files.length) * 100;
-        progressBar.style.width = percent + "%";
-        progressBar.textContent = Math.round(percent) + "%";
-        
-        resolve();
-      };
+          const percent = ((i + 1) / files.length) * 100;
+          progressBar.style.width = percent + "%";
+          progressBar.textContent = Math.round(percent) + "%";
+          
+          resolve();
+        };
 
-      // CRITICAL FIX: 
-      // If it's an image, read as DataURL (Base64) to prevent corruption.
-      // If it's code/text, read as Text so it stays editable in the editor.
-      const isImage = f.type.startsWith("image/");
-      if (isImage) {
-        reader.readAsDataURL(f);
-      } else {
-        reader.readAsText(f);
-      }
+        const isImage = f.type.startsWith("image/");
+        if (isImage) {
+          reader.readAsDataURL(f);
+        } else {
+          reader.readAsText(f);
+        }
+      });
     });
-  });
 
-  // Wait for all files to finish reading
-  await Promise.all(uploadPromises);
+    await Promise.all(uploadPromises);
+    await saveCurrentWebsite();
+    renderFileTree();
 
-  // Save the updated currentFiles array to Firebase
-  await saveCurrentWebsite();
-  
-  // Refresh the UI
-  renderFileTree();
-
-  // Hide progress bar after a short delay
-  setTimeout(() => {
-    progressContainer.style.display = "none";
-    progressBar.style.width = "0%";
-  }, 1000);
-}
+    setTimeout(() => {
+      progressContainer.style.display = "none";
+      progressBar.style.width = "0%";
+    }, 1000);
+  }
 
   fileInput.addEventListener("change", handleUpload);
   if (folderInput) folderInput.addEventListener("change", handleUpload);
@@ -294,7 +345,13 @@ document.addEventListener("DOMContentLoaded", () => {
       li.setAttribute("draggable", "true");
 
       if (item.__isFile) {
-        li.textContent = name;
+        // Special styling for favicon.ico
+        if (fullPath === "favicon.ico") {
+          li.style.color = "#888"; // Grayed out
+          li.innerHTML = `<i style="font-size: 0.9em; margin-right: 5px;">(ico)</i> ${name}`;
+        } else {
+          li.textContent = name;
+        }
         li.onclick = () => onFileClick(item.__data);
       } else {
         li.textContent = "📁 " + name;
@@ -302,16 +359,10 @@ document.addEventListener("DOMContentLoaded", () => {
         renderTree(item.children, ul, onFileClick, fullPath);
         li.appendChild(ul);
 
-        // Folders serve as drop targets
-        li.ondragover = (e) => { 
-          e.preventDefault(); 
-          e.stopPropagation(); 
-          li.classList.add("drag-over"); 
-        };
+        li.ondragover = (e) => { e.preventDefault(); e.stopPropagation(); li.classList.add("drag-over"); };
         li.ondragleave = () => li.classList.remove("drag-over");
         li.ondrop = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
+          e.preventDefault(); e.stopPropagation();
           li.classList.remove("drag-over");
           const data = JSON.parse(e.dataTransfer.getData("application/json"));
           if (fullPath.startsWith(data.path)) return alert("Cannot move folder into itself.");
@@ -319,7 +370,6 @@ document.addEventListener("DOMContentLoaded", () => {
         };
       }
 
-      // Drag sources
       li.ondragstart = (e) => {
         e.stopPropagation();
         e.dataTransfer.setData("application/json", JSON.stringify({ path: fullPath, isFile: item.__isFile }));
@@ -327,7 +377,6 @@ document.addEventListener("DOMContentLoaded", () => {
       };
       li.ondragend = () => li.style.opacity = "1";
 
-      // Context menu trigger
       li.oncontextmenu = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -341,7 +390,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // --- Deployment & Settings ---
+  // --- Deployment & Modal Controls ---
   deployBtn.onclick = async () => {
     deployBtn.disabled = true;
     deployStatus.textContent = "Deploying...";
@@ -355,6 +404,17 @@ document.addEventListener("DOMContentLoaded", () => {
   settingsBtn.onclick = () => { 
     settingsModal.style.display = "block"; 
     renameSlugInput.value = currentSite.customSlug || ""; 
+    
+    // Check for existing icon to toggle "Clear" button
+    const hasIcon = currentFiles.some(f => f.path === "favicon.ico");
+    clearIconBtn.style.display = hasIcon ? "inline-block" : "none";
+    iconStatus.textContent = hasIcon ? "Current icon: favicon.ico" : "No custom icon set.";
+    saveIconBtn.disabled = true;
+    iconInput.value = "";
   };
-  closeModal.onclick = () => settingsModal.style.display = "none";
+
+  closeModal.onclick = () => {
+    settingsModal.style.display = "none";
+    pendingIcon = null; // Reset pending state on close
+  };
 });
