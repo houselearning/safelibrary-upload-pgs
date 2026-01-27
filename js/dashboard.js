@@ -224,7 +224,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const result = await dispatchDeploy(currentUser.uid, currentSite.siteId, currentFiles);
         
         console.log("Deploy Success:", result);
+        const siteUrl = `https://pages.houselearning.org/`;
         deployStatus.textContent = "Deployed successfully!";
+        deployStatus.innerHTML = `Deployed successfully! <br> <a href="${siteUrl}" target="_blank" style="color: blue; text-decoration: underline;">View Live Site</a>`;
       } catch (err) {
         console.error("Deploy Error:", err);
         deployStatus.textContent = "Deploy failed: " + err.message;
