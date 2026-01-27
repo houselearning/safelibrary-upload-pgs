@@ -1,5 +1,6 @@
 // dashboard.js
 document.addEventListener("DOMContentLoaded", () => {
+  // Elements
   const sitesList = document.getElementById("sites-list");
   const treePanel = document.getElementById("tree-panel");
   const fileTree = document.getElementById("file-tree");
@@ -11,6 +12,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const createSiteBtn = document.getElementById("create-site-btn");
   const fileInput = document.getElementById("file-input");
   const saveFileBtn = document.getElementById("save-file-btn");
+  const uploadFilesBtn = document.getElementById("upload-files-btn");
+  const newFolderBtn = document.getElementById("new-folder-btn");
+  
+  // Progress Elements
+  const progressContainer = document.getElementById("progress-container");
+  const progressBar = document.getElementById("progress-bar");
 
   // Settings Elements
   const settingsBtn = document.getElementById("settings-btn");
@@ -31,8 +38,10 @@ document.addEventListener("DOMContentLoaded", () => {
     deployBtn.disabled = true;
     deployStatus.textContent = "";
     fileTree.innerHTML = "";
+    progressContainer.style.display = "none";
   }
 
+  // --- AUTH & LOADING ---
   firebase.auth().onAuthStateChanged(async (user) => {
     if (!user) { window.location.href = "index.html"; return; }
     currentUser = user;
@@ -66,64 +75,79 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("site-url").textContent = `pages.houselearning.org/${displayId}/`;
   }
 
-  // --- SETTINGS LOGIC ---
+  // --- PROGRESS BAR LOGIC ---
+  function updateProgress(percent) {
+    progressContainer.style.display = "block";
+    progressBar.style.width = percent + "%";
+    progressBar.textContent = Math.round(percent) + "%";
+    if (percent >= 100) {
+      setTimeout(() => { progressContainer.style.display = "none"; }, 1500);
+    }
+  }
+
+  // --- UPLOAD & FOLDER ACTION WIRING ---
+  uploadFilesBtn.onclick = () => fileInput.click();
+
+  fileInput.addEventListener("change", async (ev) => {
+    const files = Array.from(ev.target.files || []);
+    if (files.length === 0) return;
+
+    deployStatus.textContent = "Uploading folder...";
+    let processed = 0;
+
+    for (const f of files) {
+      const relPath = f.webkitRelativePath || f.name;
+      const text = await f.text();
+      
+      currentFiles = currentFiles.filter(x => x.path !== relPath);
+      currentFiles.push({ path: relPath, content: text, contentType: f.type || "text/plain" });
+      
+      processed++;
+      updateProgress((processed / files.length) * 100);
+    }
+
+    await saveCurrentWebsite();
+    renderFileTree();
+    deployStatus.textContent = "Upload complete!";
+  });
+
+  newFolderBtn.onclick = async () => {
+    const folderName = prompt("Enter folder name:");
+    if (!folderName) return;
+    currentFiles.push({ path: `${folderName}/.keep`, content: "Folder index", contentType: "text/plain" });
+    await saveCurrentWebsite();
+    renderFileTree();
+  };
+
+  // --- SETTINGS MODAL ---
   settingsBtn.onclick = () => {
     settingsModal.style.display = "block";
     renameSlugInput.value = currentSite.customSlug || "";
-    slugStatus.textContent = "";
   };
-  
   closeModal.onclick = () => settingsModal.style.display = "none";
   window.onclick = (e) => { if (e.target == settingsModal) settingsModal.style.display = "none"; };
 
   saveSlugBtn.onclick = async () => {
     const newSlug = renameSlugInput.value.trim().replace(/[^a-zA-Z0-9-]/g, "");
-    if (!newSlug) return alert("Please enter a valid slug");
-    
-    slugStatus.textContent = "Checking availability...";
-    
-    try {
-      // Check if slug is taken by someone else
-      const db = firebase.firestore();
-      const snapshot = await db.collection("sites").where("customSlug", "==", newSlug).get();
-      
-      if (!snapshot.empty && snapshot.docs[0].id !== currentSite.siteId) {
-        slugStatus.textContent = "Error: That name is already taken.";
-        slugStatus.style.color = "red";
-        return;
-      }
-
-      // Update the record
-      await db.collection("users").doc(currentUser.uid).collection("sites").doc(currentSite.siteId).update({
-        customSlug: newSlug
-      });
-      
-      currentSite.customSlug = newSlug;
-      slugStatus.textContent = "Slug updated successfully!";
-      slugStatus.style.color = "green";
-      document.getElementById("site-url").textContent = `pages.houselearning.org/${newSlug}/`;
-    } catch (err) {
-      slugStatus.textContent = "Update failed: " + err.message;
-    }
+    if (!newSlug) return;
+    const db = firebase.firestore();
+    await db.collection("users").doc(currentUser.uid).collection("sites").doc(currentSite.siteId).update({ customSlug: newSlug });
+    currentSite.customSlug = newSlug;
+    document.getElementById("site-url").textContent = `pages.houselearning.org/${newSlug}/`;
+    alert("URL Updated!");
   };
 
   deleteSiteBtn.onclick = async () => {
-    if (!confirm("Are you absolutely sure? This cannot be undone.")) return;
-    try {
-      const db = firebase.firestore();
-      // 1. Delete site files record
-      await db.collection("siteFiles").doc(`${currentUser.uid}_${currentSite.siteId}`).delete();
-      // 2. Delete site metadata
-      await db.collection("users").doc(currentUser.uid).collection("sites").doc(currentSite.siteId).delete();
-      
-      alert("Site deleted.");
-      settingsModal.style.display = "none";
-      resetUI();
-      await loadSites();
-    } catch (err) { alert("Delete failed: " + err.message); }
+    if (!confirm("Delete site?")) return;
+    const db = firebase.firestore();
+    await db.collection("siteFiles").doc(`${currentUser.uid}_${currentSite.siteId}`).delete();
+    await db.collection("users").doc(currentUser.uid).collection("sites").doc(currentSite.siteId).delete();
+    resetUI();
+    await loadSites();
+    settingsModal.style.display = "none";
   };
 
-  // --- SAVE & DEPLOY LOGIC ---
+  // --- SAVE & DEPLOY ---
   async function saveCurrentWebsite() {
     if (!currentSite || !currentUser) return false;
     const path = editorFilename.textContent;
@@ -134,7 +158,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (typeof saveSiteFiles === "function") {
       await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
-      renderFileTree();
       return true;
     }
     return false;
@@ -144,25 +167,23 @@ document.addEventListener("DOMContentLoaded", () => {
     deployStatus.textContent = "Saving...";
     if (await saveCurrentWebsite()) {
       deployStatus.textContent = "Saved!";
-      setTimeout(() => deployStatus.textContent = "", 2000);
+      renderFileTree();
     }
   };
 
   deployBtn.onclick = async () => {
     deployBtn.disabled = true;
-    deployStatus.textContent = "Saving...";
+    deployStatus.textContent = "Saving and Deploying...";
     if (await saveCurrentWebsite()) {
-      deployStatus.textContent = "Deploying...";
-      // Pass the customSlug if it exists so GitHub builds into the right folder
-      const deployFolder = currentSite.customSlug || currentSite.siteId;
       await dispatchDeploy(currentUser.uid, currentSite.siteId, currentFiles);
-      const url = `https://pages.houselearning.org/${deployFolder}/`;
-      deployStatus.innerHTML = `Success! <br> <a href="${url}" target="_blank">View Site</a>`;
+      const displayId = currentSite.customSlug || currentSite.siteId;
+      const url = `https://pages.houselearning.org/${displayId}/`;
+      deployStatus.innerHTML = `Deployed! <br> <a href="${url}" target="_blank">View Site</a>`;
     }
     deployBtn.disabled = false;
   };
 
-  // --- TREE VIEW ---
+  // --- TREE HELPERS ---
   function renderFileTree() {
     fileTree.innerHTML = "";
     const tree = buildTree(currentFiles);
@@ -192,9 +213,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const li = document.createElement("li");
       if (item.__isFile) {
         li.textContent = name;
+        li.style.cursor = "pointer";
         li.onclick = () => onFileClick(item.__data);
       } else {
-        li.textContent = "[Folder] " + name;
+        li.textContent = "📁 " + name;
         const ul = document.createElement("ul");
         renderTree(item.children, ul, onFileClick);
         li.appendChild(ul);
@@ -208,29 +230,3 @@ document.addEventListener("DOMContentLoaded", () => {
     if (name) { await createSite(currentUser.uid, name); await loadSites(); }
   };
 });
-// 1. Make the 'Upload Files' button open the hidden file input
-if (uploadFilesBtn) {
-  uploadFilesBtn.addEventListener("click", () => {
-    fileInput.click(); 
-  });
-}
-
-// 2. Handle 'New Folder' button
-if (newFolderBtn) {
-  newFolderBtn.addEventListener("click", () => {
-    const folderName = prompt("Enter folder name:");
-    if (!folderName) return;
-
-    // To create a folder in this system, we create a 'dummy' file 
-    // inside it so the path exists in Firestore.
-    const path = `${folderName}/.keep`;
-    currentFiles.push({ 
-      path: path, 
-      content: "This file keeps the folder active.", 
-      contentType: "text/plain" 
-    });
-    
-    renderFileTree();
-    saveCurrentWebsite(); // Save the new folder structure to Firestore
-  });
-}
