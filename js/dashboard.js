@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const createSiteBtn = document.getElementById("create-site-btn");
   const fileInput = document.getElementById("file-input");
   const saveFileBtn = document.getElementById("save-file-btn");
+  const saveAllBtn = document.getElementById("save-all-btn");
   const uploadFilesBtn = document.getElementById("upload-files-btn");
   const newFolderBtn = document.getElementById("new-folder-btn");
   
@@ -25,9 +26,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const slugStatus = document.getElementById("slug-status");
   const deleteSiteBtn = document.getElementById("delete-site-btn");
 
+  const contextMenu = document.getElementById("context-menu");
+  const deleteTreeItem = document.getElementById("delete-tree-item");
+
   let currentUser = null;
   let currentSite = null;
   let currentFiles = [];
+  let rightClickedItem = null; // Tracks the path for deletion
 
   function resetUI() {
     treePanel.classList.add("hidden");
@@ -58,7 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function openSite(site) {
-    currentSite = site; // Sets the global state so settings work
+    currentSite = site;
     treePanel.classList.remove("hidden");
     editorPanel.classList.add("hidden");
     deployStatus.textContent = "Loading...";
@@ -70,6 +75,36 @@ document.addEventListener("DOMContentLoaded", () => {
     const displayId = site.customSlug || site.siteId;
     document.getElementById("site-url").textContent = `pages.houselearning.org/${displayId}/`;
   }
+
+  // --- SAVE ALL LOGIC ---
+  saveAllBtn.onclick = async () => {
+    deployStatus.textContent = "Saving all files...";
+    if (await saveCurrentWebsite()) {
+      deployStatus.textContent = "All changes saved!";
+    } else {
+      deployStatus.textContent = "Save failed.";
+    }
+  };
+
+  // --- CONTEXT MENU LOGIC ---
+  window.addEventListener("click", () => { contextMenu.style.display = "none"; });
+
+  deleteTreeItem.onclick = async () => {
+    if (!rightClickedItem || !currentSite) return;
+    const { path, isFile } = rightClickedItem;
+    
+    if (confirm(`Are you sure you want to delete ${path}?`)) {
+      if (isFile) {
+        currentFiles = currentFiles.filter(f => f.path !== path);
+      } else {
+        // Delete folder and all nested files
+        const prefix = path.endsWith('/') ? path : path + '/';
+        currentFiles = currentFiles.filter(f => !f.path.startsWith(prefix));
+      }
+      renderFileTree();
+      await saveCurrentWebsite();
+    }
+  };
 
   // --- SETTINGS LOGIC ---
   settingsBtn.onclick = () => {
@@ -90,7 +125,6 @@ document.addEventListener("DOMContentLoaded", () => {
     
     try {
       const db = firebase.firestore();
-      // Global check
       const snapshot = await db.collection("sites").where("customSlug", "==", newSlug).get();
       if (!snapshot.empty && snapshot.docs[0].id !== currentSite.siteId) {
         slugStatus.textContent = "Error: Name taken.";
@@ -98,7 +132,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Use .set with merge to prevent "No document to update" error
       await db.collection("users").doc(currentUser.uid).collection("sites").doc(currentSite.siteId).set({
         customSlug: newSlug,
         uid: currentUser.uid
@@ -189,7 +222,7 @@ document.addEventListener("DOMContentLoaded", () => {
       editorPanel.classList.remove("hidden");
       editorFilename.textContent = file.path;
       editorContent.value = file.content || "";
-    });
+    }, ""); // Pass empty string as initial parent path
   }
 
   function buildTree(files) {
@@ -205,19 +238,32 @@ document.addEventListener("DOMContentLoaded", () => {
     return root;
   }
 
-  function renderTree(node, parentEl, onFileClick) {
+  function renderTree(node, parentEl, onFileClick, currentPath) {
     Object.keys(node).sort().forEach(name => {
       const item = node[name];
       const li = document.createElement("li");
+      const fullPath = currentPath ? `${currentPath}/${name}` : name;
+
       if (item.__isFile) {
         li.textContent = name;
         li.onclick = () => onFileClick(item.__data);
       } else {
         li.textContent = "📁 " + name;
         const ul = document.createElement("ul");
-        renderTree(item.children, ul, onFileClick);
+        renderTree(item.children, ul, onFileClick, fullPath);
         li.appendChild(ul);
       }
+
+      // Right-click event listener
+      li.oncontextmenu = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        rightClickedItem = { path: fullPath, isFile: item.__isFile };
+        contextMenu.style.display = "block";
+        contextMenu.style.left = e.pageX + "px";
+        contextMenu.style.top = e.pageY + "px";
+      };
+
       parentEl.appendChild(li);
     });
   }
