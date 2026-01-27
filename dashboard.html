@@ -5,12 +5,10 @@
   <title>Dashboard – HouseLearning Pages</title>
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- Firebase -->
   <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore-compat.js"></script>
 
-  <!-- Your scripts -->
   <script defer src="js/firebase-init.js"></script>
   <script defer src="js/api.js"></script>
   <script defer src="js/treeview.js"></script>
@@ -28,35 +26,35 @@
 
   <main class="dashboard-container">
 
-    <!-- Left: Sites list -->
     <aside class="sites-panel">
       <h2>Your Sites</h2>
       <button id="create-site-btn">New Site</button>
       <ul id="sites-list"></ul>
     </aside>
 
-    <!-- Middle: File tree -->
     <aside class="tree-panel hidden" id="tree-panel">
-      <h2 id="site-title"></h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <h2 id="site-title" style="margin: 0;"></h2>
+        <button id="save-file-btn" style="background-color: #4CAF50; color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 4px;">Save Website</button>
+      </div>
+      
       <p class="site-url">URL: <code id="site-url"></code></p>
 
       <div class="tree-actions">
         <button id="new-folder-btn">New Folder</button>
         <button id="upload-files-btn">Upload Files</button>
-        <input type="file" id="file-input" multiple webkitdirectory directory />
+        <input type="file" id="file-input" multiple webkitdirectory directory style="display:none;" />
       </div>
 
       <ul id="file-tree" class="treeview"></ul>
 
-      <button id="deploy-btn" class="deploy-btn">Deploy Site</button>
-      <p id="deploy-status"></p>
+      <button id="deploy-btn" class="deploy-btn" style="margin-top: 20px; width: 100%;">Deploy Site</button>
+      <p id="deploy-status" style="margin-top: 10px; font-weight: bold;"></p>
     </aside>
 
-    <!-- Right: File editor -->
     <section class="editor-panel hidden" id="editor-panel">
       <h2 id="editor-filename"></h2>
-      <textarea id="editor-content"></textarea>
-      <button id="save-file-btn">Save</button>
+      <textarea id="editor-content" style="width: 100%; height: 400px; font-family: monospace;"></textarea>
     </section>
 
   </main>
