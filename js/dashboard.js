@@ -198,25 +198,65 @@ document.addEventListener("DOMContentLoaded", () => {
   if (uploadFolderBtn) uploadFolderBtn.onclick = () => folderInput.click();
 
   async function handleUpload(ev) {
-    const files = Array.from(ev.target.files || []);
-    if (files.length === 0) return;
-    
-    progressContainer.style.display = "block";
-    for (let i = 0; i < files.length; i++) {
-      const f = files[i];
-      const relPath = f.webkitRelativePath || f.name;
-      const text = await f.text();
-      currentFiles = currentFiles.filter(x => x.path !== relPath);
-      currentFiles.push({ path: relPath, content: text, contentType: f.type || "text/plain" });
-      
-      const percent = ((i + 1) / files.length) * 100;
-      progressBar.style.width = percent + "%";
-      progressBar.textContent = Math.round(percent) + "%";
-    }
-    await saveCurrentWebsite();
-    renderFileTree();
-    setTimeout(() => { progressContainer.style.display = "none"; }, 1000);
-  }
+  const files = Array.from(ev.target.files || []);
+  if (files.length === 0) return;
+
+  progressContainer.style.display = "block";
+
+  // We use a Promise.all to wait for all files to be read before saving
+  const uploadPromises = files.map((f, i) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+
+      reader.onload = async (e) => {
+        const content = e.target.result;
+        // The webkitRelativePath preserves folder structure for "Upload Folder"
+        // If it's an individual file upload, it defaults to just the file name
+        const relPath = f.webkitRelativePath || f.name;
+
+        // Update local state: remove if exists, then add new version
+        currentFiles = currentFiles.filter((x) => x.path !== relPath);
+        currentFiles.push({
+          path: relPath,
+          content: content, // This is now safe Base64 for images or Text for code
+          contentType: f.type || "text/plain",
+        });
+
+        // Update progress bar
+        const percent = ((i + 1) / files.length) * 100;
+        progressBar.style.width = percent + "%";
+        progressBar.textContent = Math.round(percent) + "%";
+        
+        resolve();
+      };
+
+      // CRITICAL FIX: 
+      // If it's an image, read as DataURL (Base64) to prevent corruption.
+      // If it's code/text, read as Text so it stays editable in the editor.
+      const isImage = f.type.startsWith("image/");
+      if (isImage) {
+        reader.readAsDataURL(f);
+      } else {
+        reader.readAsText(f);
+      }
+    });
+  });
+
+  // Wait for all files to finish reading
+  await Promise.all(uploadPromises);
+
+  // Save the updated currentFiles array to Firebase
+  await saveCurrentWebsite();
+  
+  // Refresh the UI
+  renderFileTree();
+
+  // Hide progress bar after a short delay
+  setTimeout(() => {
+    progressContainer.style.display = "none";
+    progressBar.style.width = "0%";
+  }, 1000);
+}
 
   fileInput.addEventListener("change", handleUpload);
   if (folderInput) folderInput.addEventListener("change", handleUpload);
