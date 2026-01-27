@@ -127,14 +127,42 @@ document.addEventListener("DOMContentLoaded", () => {
   closeModal.onclick = () => settingsModal.style.display = "none";
   window.onclick = (e) => { if (e.target == settingsModal) settingsModal.style.display = "none"; };
 
-  saveSlugBtn.onclick = async () => {
+saveSlugBtn.onclick = async () => {
     const newSlug = renameSlugInput.value.trim().replace(/[^a-zA-Z0-9-]/g, "");
-    if (!newSlug) return;
-    const db = firebase.firestore();
-    await db.collection("users").doc(currentUser.uid).collection("sites").doc(currentSite.siteId).update({ customSlug: newSlug });
-    currentSite.customSlug = newSlug;
-    document.getElementById("site-url").textContent = `pages.houselearning.org/${newSlug}/`;
-    alert("URL Updated!");
+    if (!newSlug) return alert("Please enter a valid slug");
+    
+    slugStatus.textContent = "Checking availability...";
+    
+    try {
+      const db = firebase.firestore();
+      // Check if slug is taken globally
+      const snapshot = await db.collection("sites").where("customSlug", "==", newSlug).get();
+      
+      if (!snapshot.empty && snapshot.docs[0].id !== currentSite.siteId) {
+        slugStatus.textContent = "Error: That name is already taken.";
+        slugStatus.style.color = "red";
+        return;
+      }
+
+      // FIX: Use .set with { merge: true } instead of .update
+      // This ensures the document is created if it was missing from the user's subcollection
+      await db.collection("users")
+        .doc(currentUser.uid)
+        .collection("sites")
+        .doc(currentSite.siteId)
+        .set({
+          customSlug: newSlug,
+          uid: currentUser.uid // Storing UID helps with security rule validation
+        }, { merge: true });
+      
+      currentSite.customSlug = newSlug;
+      slugStatus.textContent = "Slug updated successfully!";
+      slugStatus.style.color = "green";
+      document.getElementById("site-url").textContent = `pages.houselearning.org/${newSlug}/`;
+    } catch (err) {
+      console.error("Update error:", err);
+      slugStatus.textContent = "Update failed: " + err.message;
+    }
   };
 
   deleteSiteBtn.onclick = async () => {
