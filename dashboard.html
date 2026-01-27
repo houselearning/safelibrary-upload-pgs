@@ -117,22 +117,36 @@
   </div>
 
   <div id="settings-modal" class="modal">
-    <div class="modal-content">
-      <span class="close-btn" id="close-modal">&times;</span>
-      <h3>Site Settings</h3>
-      <div style="margin-bottom: 15px;">
-        <label>Rename Site URL (Slug):</label><br>
-        <div style="display: flex; gap: 5px; margin-top: 5px;">
-          <input type="text" id="rename-slug-input" placeholder="slug" style="flex-grow: 1; padding: 5px;">
-          <button id="save-slug-btn">Update</button>
-        </div>
-        <small id="slug-status"></small>
+  <div class="modal-content">
+    <span class="close-btn" id="close-modal">&times;</span>
+    <h3>Site Settings</h3>
+    
+    <div style="margin-bottom: 20px;">
+      <label>Rename Site URL (Slug):</label><br>
+      <div style="display: flex; gap: 5px; margin-top: 5px;">
+        <input type="text" id="rename-slug-input" placeholder="slug" style="flex-grow: 1; padding: 5px;">
+        <button id="save-slug-btn">Update</button>
       </div>
-      <div class="danger-zone">
-        <h4 style="color: red; margin-top: 0;">Danger Zone</h4>
-        <button id="delete-site-btn" style="background-color: #f44336; color: white; border: none; padding: 8px 12px; cursor: pointer; width: 100%;">Delete Site Record</button>
+      <small id="slug-status"></small>
+    </div>
+
+    <div style="margin-bottom: 20px; border-top: 1px solid #eee; padding-top: 15px;">
+      <label><strong>Website Icon (Favicon)</strong></label><br>
+      <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <input type="file" id="icon-input" accept=".ico,.png,.jpg,.jpeg,.gif,.bmp" style="font-size: 0.8em;">
+          <button id="clear-icon-btn" style="display: none; background: #f0f0f0; border: 1px solid #ccc; padding: 2px 8px; cursor: pointer; border-radius: 4px;">Clear Icon</button>
+        </div>
+        <small id="icon-status" style="color: #666;">Supported: ico, png, jpg, gif, bmp</small>
+        <button id="save-icon-btn" disabled style="padding: 8px; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 4px;">Save Icon</button>
       </div>
     </div>
+
+    <div class="danger-zone">
+      <h4 style="color: red; margin-top: 0;">Danger Zone</h4>
+      <button id="delete-site-btn" style="background-color: #f44336; color: white; border: none; padding: 8px 12px; cursor: pointer; width: 100%;">Delete Site Record</button>
+    </div>
   </div>
+</div>
 </body>
 </html>
