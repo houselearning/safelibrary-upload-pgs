@@ -1,5 +1,4 @@
 // dashboard.js
-// Assumes firebase-init.js loaded and firebase compat SDK available
 document.addEventListener("DOMContentLoaded", () => {
   // UI elements
   const sitesList = document.getElementById("sites-list");
@@ -11,8 +10,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const deployBtn = document.getElementById("deploy-btn");
   const deployStatus = document.getElementById("deploy-status");
   const createSiteBtn = document.getElementById("create-site-btn");
-  const newFolderBtn = document.getElementById("new-folder-btn");
-  const uploadFilesBtn = document.getElementById("upload-files-btn");
   const fileInput = document.getElementById("file-input");
   const saveFileBtn = document.getElementById("save-file-btn");
 
@@ -21,7 +18,6 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentSite = null;
   let currentFiles = [];
 
-  // Basic UI safety
   function resetUI() {
     if (treePanel) treePanel.classList.add("hidden");
     if (editorPanel) editorPanel.classList.add("hidden");
@@ -40,33 +36,27 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       currentUser = user;
+      document.getElementById("user-email").textContent = user.email;
       if (typeof ensureUserDoc === "function") {
         await ensureUserDoc(user);
-      } else {
-        console.warn("ensureUserDoc not found; continuing");
       }
       await loadSites();
     } catch (err) {
-      console.error("Auth state handler error", err);
+      console.error("Auth error", err);
     }
   });
 
-  // Load user's sites
   async function loadSites() {
     try {
-      if (!currentUser || !currentUser.uid) throw new Error("No current user");
       const sites = typeof getUserSites === "function" ? await getUserSites(currentUser.uid) : [];
       sitesList.innerHTML = "";
-      if (!sites || sites.length === 0) {
-        const li = document.createElement("li");
-        li.textContent = "No sites yet";
-        sitesList.appendChild(li);
+      if (sites.length === 0) {
+        sitesList.innerHTML = "<li>No sites yet</li>";
         return;
       }
       sites.forEach((site) => {
         const li = document.createElement("li");
-        li.textContent = site.name || site.slug || site.siteId;
-        li.dataset.siteId = site.siteId;
+        li.textContent = site.name || site.siteId;
         li.onclick = () => openSite(site);
         sitesList.appendChild(li);
       });
@@ -75,44 +65,100 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Open a site
   async function openSite(site) {
     try {
-      currentSite = site || null;
-      if (!currentSite || !currentSite.siteId) {
-        alert("Invalid site selected");
-        return;
-      }
-
-      if (treePanel) treePanel.classList.remove("hidden");
-      if (editorPanel) editorPanel.classList.add("hidden");
-      if (deployBtn) deployBtn.disabled = true;
-      if (deployStatus) deployStatus.textContent = "Loading files...";
-
-      if (!currentUser || !currentUser.uid) throw new Error("No current user");
-      currentFiles = typeof getSiteFiles === "function" ? await getSiteFiles(currentUser.uid, currentSite.siteId) : [];
-      if (!Array.isArray(currentFiles)) currentFiles = [];
-
+      currentSite = site;
+      treePanel.classList.remove("hidden");
+      editorPanel.classList.add("hidden");
+      deployStatus.textContent = "Loading files...";
+      
+      currentFiles = typeof getSiteFiles === "function" ? await getSiteFiles(currentUser.uid, site.siteId) : [];
       renderFileTree();
-      if (deployBtn) deployBtn.disabled = false;
-      if (deployStatus) deployStatus.textContent = "";
+      
+      deployBtn.disabled = false;
+      deployStatus.textContent = "";
+      document.getElementById("site-title").textContent = site.name;
+      document.getElementById("site-url").textContent = `pages.houselearning.org/${site.siteId}/`;
     } catch (err) {
       console.error("openSite error", err);
-      if (deployStatus) deployStatus.textContent = "Failed to load files";
-      if (deployBtn) deployBtn.disabled = true;
+      deployStatus.textContent = "Failed to load files";
     }
   }
 
-  // Tree Building logic
+  // --- SAVE LOGIC ---
+  async function saveCurrentWebsite() {
+    if (!currentSite || !currentUser) return false;
+    try {
+      // Capture current editor content if a file is open
+      const path = editorFilename.textContent;
+      if (path && editorPanel.offsetParent !== null) {
+        const content = editorContent.value;
+        currentFiles = currentFiles.filter((f) => f.path !== path);
+        currentFiles.push({ path, content, contentType: "text/plain" });
+      }
+
+      if (typeof saveSiteFiles === "function") {
+        await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
+        renderFileTree();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error("Save error", err);
+      return false;
+    }
+  }
+
+  if (saveFileBtn) {
+    saveFileBtn.addEventListener("click", async () => {
+      deployStatus.textContent = "Saving...";
+      const ok = await saveCurrentWebsite();
+      deployStatus.textContent = ok ? "Saved successfully!" : "Save failed.";
+      setTimeout(() => { if (deployStatus.textContent.includes("Saved")) deployStatus.textContent = ""; }, 2000);
+    });
+  }
+
+  // --- DEPLOY LOGIC (WITH AUTO-SAVE) ---
+  if (deployBtn) {
+    deployBtn.addEventListener("click", async () => {
+      try {
+        deployBtn.disabled = true;
+        deployStatus.textContent = "Saving latest changes...";
+        
+        const saveOk = await saveCurrentWebsite();
+        if (!saveOk) throw new Error("Could not save files before deployment.");
+
+        deployStatus.textContent = "Triggering deployment...";
+        await dispatchDeploy(currentUser.uid, currentSite.siteId, currentFiles);
+        
+        const siteUrl = `https://pages.houselearning.org/${currentSite.siteId}/`;
+        deployStatus.innerHTML = `Deployed successfully! <br> <a href="${siteUrl}" target="_blank" style="color: blue; text-decoration: underline;">View Live Site</a>`;
+      } catch (err) {
+        deployStatus.textContent = "Deploy failed: " + err.message;
+      } finally {
+        deployBtn.disabled = false;
+      }
+    });
+  }
+
+  // --- FILE TREE & EDITOR ---
+  function renderFileTree() {
+    fileTree.innerHTML = "";
+    const tree = buildTree(currentFiles);
+    renderTree(tree, fileTree, (file) => {
+      editorPanel.classList.remove("hidden");
+      editorFilename.textContent = file.path;
+      editorContent.value = file.content || "";
+    });
+  }
+
   function buildTree(files) {
     const root = {};
-    (files || []).forEach((f) => {
-      const parts = (f.path || "").split("/").filter(Boolean);
+    files.forEach((f) => {
+      const parts = f.path.split("/").filter(Boolean);
       let node = root;
       parts.forEach((part, idx) => {
-        if (!node[part]) {
-          node[part] = { __isFile: idx === parts.length - 1, __data: idx === parts.length - 1 ? f : null, children: {} };
-        }
+        if (!node[part]) node[part] = { __isFile: idx === parts.length - 1, __data: idx === parts.length - 1 ? f : null, children: {} };
         node = node[part].children;
       });
     });
@@ -124,143 +170,39 @@ document.addEventListener("DOMContentLoaded", () => {
       const item = node[name];
       const li = document.createElement("li");
       if (item.__isFile) {
-        li.classList.add("file");
         li.textContent = name;
-        li.onclick = (e) => {
-          e.stopPropagation();
-          onFileClick(item.__data);
-        };
+        li.className = "file-item";
+        li.onclick = () => onFileClick(item.__data);
       } else {
-        li.classList.add("folder");
-        const span = document.createElement("span");
-        span.textContent = name;
-        span.classList.add("folder-label");
-        li.appendChild(span);
+        li.textContent = "[Folder] " + name;
         const ul = document.createElement("ul");
-        ul.classList.add("nested");
         renderTree(item.children, ul, onFileClick);
         li.appendChild(ul);
-        span.onclick = (e) => {
-          e.stopPropagation();
-          ul.classList.toggle("active");
-        };
       }
       parentEl.appendChild(li);
     });
   }
 
-  function renderFileTree() {
-    if (!fileTree) return;
-    fileTree.innerHTML = "";
-    const tree = buildTree(currentFiles);
-    renderTree(tree, fileTree, openFileEditor);
-  }
-
-  // Editor
-  function openFileEditor(file) {
-    if (!file) return;
-    if (editorPanel) editorPanel.classList.remove("hidden");
-    if (editorFilename) editorFilename.textContent = file.path;
-    if (editorContent) editorContent.value = file.content || "";
-  }
-
-  // Save functionality
-  if (saveFileBtn) {
-    saveFileBtn.addEventListener("click", async () => {
-      try {
-        const path = editorFilename && editorFilename.textContent;
-        if (!path) return alert("No file selected");
-        const content = editorContent && editorContent.value;
-        currentFiles = currentFiles.filter((f) => f.path !== path);
-        currentFiles.push({ path, content, contentType: "text/plain" });
-        
-        if (!currentUser || !currentUser.uid) throw new Error("Not authenticated");
-        if (typeof saveSiteFiles === "function") {
-          await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
-          renderFileTree();
-          deployStatus.textContent = "Saved";
-          setTimeout(() => { if (deployStatus) deployStatus.textContent = ""; }, 1500);
-        }
-      } catch (err) {
-        console.error("save file error", err);
-        deployStatus.textContent = "Save failed";
-      }
-    });
-  }
-
-  // ===============================
-  // UPDATED DEPLOY BUTTON FOR SUB-DOMAINS
-  // ===============================
-  if (deployBtn) {
-    deployBtn.addEventListener("click", async () => {
-      if (!currentSite || !currentUser) {
-        alert("Please select a site first.");
-        return;
-      }
-
-      try {
-        deployStatus.textContent = "Deploying...";
-        deployBtn.disabled = true;
-
-        // Trigger the GitHub dispatch (ID-only payload)
-        await dispatchDeploy(currentUser.uid, currentSite.siteId, currentFiles);
-        
-        // Calculate the unique sub-folder URL
-        const siteUrl = `https://pages.houselearning.org/${currentSite.siteId}/`;
-        
-        deployStatus.innerHTML = `
-          Deployed successfully!<br>
-          <a href="${siteUrl}" target="_blank" style="color: blue; text-decoration: underline; font-weight: bold;">
-            View Site: ${siteUrl}
-          </a>
-        `;
-      } catch (err) {
-        console.error("Deploy Error:", err);
-        deployStatus.textContent = "Deploy failed: " + err.message;
-      } finally {
-        deployBtn.disabled = false;
-      }
-    });
-  }
-
-  // Create site button
+  // Create site and File upload listeners (Keep as they were)
   if (createSiteBtn) {
     createSiteBtn.addEventListener("click", async () => {
       const name = prompt("Site name");
-      if (!name) return;
-      try {
-        if (!currentUser || !currentUser.uid) throw new Error("Not authenticated");
+      if (name) {
         const { siteId } = await createSite(currentUser.uid, name);
         await loadSites();
-        const sites = typeof getUserSites === "function" ? await getUserSites(currentUser.uid) : [];
-        const newSite = sites.find((s) => s.siteId === siteId);
-        if (newSite) openSite(newSite);
-      } catch (err) {
-        console.error("create site error", err);
-        alert("Failed to create site: " + err.message);
       }
     });
   }
 
-  // Upload files handler
-  if (fileInput) {
-    fileInput.addEventListener("change", async (ev) => {
-      try {
-        const files = Array.from(ev.target.files || []);
-        for (const f of files) {
-          const relPath = f.webkitRelativePath || f.name;
-          const text = await f.text();
-          currentFiles = currentFiles.filter((x) => x.path !== relPath);
-          currentFiles.push({ path: relPath, content: text, contentType: f.type || "application/octet-stream" });
-        }
-        if (typeof saveSiteFiles === "function") {
-          await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
-        }
-        renderFileTree();
-      } catch (err) {
-        console.error("upload error", err);
-        deployStatus.textContent = "Upload failed";
-      }
-    });
-  }
+  document.getElementById("upload-files-btn").onclick = () => fileInput.click();
+  fileInput.addEventListener("change", async (ev) => {
+    const files = Array.from(ev.target.files);
+    for (const f of files) {
+      const text = await f.text();
+      const path = f.webkitRelativePath || f.name;
+      currentFiles = currentFiles.filter(x => x.path !== path);
+      currentFiles.push({ path, content: text });
+    }
+    await saveCurrentWebsite();
+  });
 });
