@@ -40,7 +40,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       currentUser = user;
-      // ensureUserDoc is defined in api.js
       if (typeof ensureUserDoc === "function") {
         await ensureUserDoc(user);
       } else {
@@ -76,7 +75,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Open a site: set currentSite immediately, then load files
+  // Open a site
   async function openSite(site) {
     try {
       currentSite = site || null;
@@ -85,13 +84,11 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // UI
       if (treePanel) treePanel.classList.remove("hidden");
       if (editorPanel) editorPanel.classList.add("hidden");
       if (deployBtn) deployBtn.disabled = true;
       if (deployStatus) deployStatus.textContent = "Loading files...";
 
-      // Load files
       if (!currentUser || !currentUser.uid) throw new Error("No current user");
       currentFiles = typeof getSiteFiles === "function" ? await getSiteFiles(currentUser.uid, currentSite.siteId) : [];
       if (!Array.isArray(currentFiles)) currentFiles = [];
@@ -106,7 +103,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Build and render tree
+  // Tree Building logic
   function buildTree(files) {
     const root = {};
     (files || []).forEach((f) => {
@@ -123,37 +120,33 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderTree(node, parentEl, onFileClick) {
-    Object.keys(node)
-      .sort()
-      .forEach((name) => {
-        const item = node[name];
-        const li = document.createElement("li");
-        if (item.__isFile) {
-          li.classList.add("file");
-          li.textContent = name;
-          li.onclick = (e) => {
-            e.stopPropagation();
-            onFileClick(item.__data);
-          };
-        } else {
-          li.classList.add("folder");
-          const span = document.createElement("span");
-          span.textContent = name;
-          span.classList.add("folder-label");
-          li.appendChild(span);
-
-          const ul = document.createElement("ul");
-          ul.classList.add("nested");
-          renderTree(item.children, ul, onFileClick);
-          li.appendChild(ul);
-
-          span.onclick = (e) => {
-            e.stopPropagation();
-            ul.classList.toggle("active");
-          };
-        }
-        parentEl.appendChild(li);
-      });
+    Object.keys(node).sort().forEach((name) => {
+      const item = node[name];
+      const li = document.createElement("li");
+      if (item.__isFile) {
+        li.classList.add("file");
+        li.textContent = name;
+        li.onclick = (e) => {
+          e.stopPropagation();
+          onFileClick(item.__data);
+        };
+      } else {
+        li.classList.add("folder");
+        const span = document.createElement("span");
+        span.textContent = name;
+        span.classList.add("folder-label");
+        li.appendChild(span);
+        const ul = document.createElement("ul");
+        ul.classList.add("nested");
+        renderTree(item.children, ul, onFileClick);
+        li.appendChild(ul);
+        span.onclick = (e) => {
+          e.stopPropagation();
+          ul.classList.toggle("active");
+        };
+      }
+      parentEl.appendChild(li);
+    });
   }
 
   function renderFileTree() {
@@ -171,40 +164,33 @@ document.addEventListener("DOMContentLoaded", () => {
     if (editorContent) editorContent.value = file.content || "";
   }
 
-  // Save file locally and to Firestore
+  // Save functionality
   if (saveFileBtn) {
     saveFileBtn.addEventListener("click", async () => {
       try {
         const path = editorFilename && editorFilename.textContent;
-        if (!path) {
-          alert("No file selected");
-          return;
-        }
+        if (!path) return alert("No file selected");
         const content = editorContent && editorContent.value;
-        // Replace or add in current local state
         currentFiles = currentFiles.filter((f) => f.path !== path);
         currentFiles.push({ path, content, contentType: "text/plain" });
         
         if (!currentUser || !currentUser.uid) throw new Error("Not authenticated");
-        
         if (typeof saveSiteFiles === "function") {
           await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
           renderFileTree();
-          if (deployStatus) deployStatus.textContent = "Saved";
-          setTimeout(() => {
-            if (deployStatus) deployStatus.textContent = "";
-          }, 1500);
-        } else {
-          console.warn("saveSiteFiles not defined; skipping save");
+          deployStatus.textContent = "Saved";
+          setTimeout(() => { if (deployStatus) deployStatus.textContent = ""; }, 1500);
         }
       } catch (err) {
         console.error("save file error", err);
-        if (deployStatus) deployStatus.textContent = "Save failed";
+        deployStatus.textContent = "Save failed";
       }
     });
   }
 
-  // FIXED DEPLOY BUTTON: Now uses dispatchDeploy from api.js
+  // ===============================
+  // UPDATED DEPLOY BUTTON FOR SUB-DOMAINS
+  // ===============================
   if (deployBtn) {
     deployBtn.addEventListener("click", async () => {
       if (!currentSite || !currentUser) {
@@ -212,21 +198,22 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      console.log("--- DEPLOY START ---");
-      console.log("Site Name:", currentSite.name);
-      console.log("Site ID:", currentSite.siteId);
-
       try {
         deployStatus.textContent = "Deploying...";
         deployBtn.disabled = true;
 
-        // Uses the function in api.js which handles the Apps Script connection [cite: 5]
-        const result = await dispatchDeploy(currentUser.uid, currentSite.siteId, currentFiles);
+        // Trigger the GitHub dispatch (ID-only payload)
+        await dispatchDeploy(currentUser.uid, currentSite.siteId, currentFiles);
         
-        console.log("Deploy Success:", result);
-        const siteUrl = `https://pages.houselearning.org/`;
-        deployStatus.textContent = "Deployed successfully!";
-        deployStatus.innerHTML = `Deployed successfully! <br> <a href="${siteUrl}" target="_blank" style="color: blue; text-decoration: underline;">View Live Site</a>`;
+        // Calculate the unique sub-folder URL
+        const siteUrl = `https://pages.houselearning.org/${currentSite.siteId}/`;
+        
+        deployStatus.innerHTML = `
+          Deployed successfully!<br>
+          <a href="${siteUrl}" target="_blank" style="color: blue; text-decoration: underline; font-weight: bold;">
+            View Site: ${siteUrl}
+          </a>
+        `;
       } catch (err) {
         console.error("Deploy Error:", err);
         deployStatus.textContent = "Deploy failed: " + err.message;
@@ -243,10 +230,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!name) return;
       try {
         if (!currentUser || !currentUser.uid) throw new Error("Not authenticated");
-        if (typeof createSite !== "function") throw new Error("createSite not defined");
         const { siteId } = await createSite(currentUser.uid, name);
         await loadSites();
-        // Auto-open new site
         const sites = typeof getUserSites === "function" ? await getUserSites(currentUser.uid) : [];
         const newSite = sites.find((s) => s.siteId === siteId);
         if (newSite) openSite(newSite);
@@ -257,7 +242,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Upload files
+  // Upload files handler
   if (fileInput) {
     fileInput.addEventListener("change", async (ev) => {
       try {
@@ -268,14 +253,13 @@ document.addEventListener("DOMContentLoaded", () => {
           currentFiles = currentFiles.filter((x) => x.path !== relPath);
           currentFiles.push({ path: relPath, content: text, contentType: f.type || "application/octet-stream" });
         }
-        if (!currentUser || !currentUser.uid) throw new Error("Not authenticated");
         if (typeof saveSiteFiles === "function") {
           await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
         }
         renderFileTree();
       } catch (err) {
-        console.error("file upload error", err);
-        if (deployStatus) deployStatus.textContent = "Upload failed";
+        console.error("upload error", err);
+        deployStatus.textContent = "Upload failed";
       }
     });
   }
