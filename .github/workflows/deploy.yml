@@ -32,33 +32,52 @@ jobs:
           SITE_ID: ${{ github.event.client_payload.siteId }}
         run: |
           python - <<EOF
-          import os, requests, json
+          import os, requests, base64, json, re
+
           doc_id = f"{os.environ['USER_UID']}_{os.environ['SITE_ID']}"
           url = f"https://firestore.googleapis.com/v1/projects/{os.environ['PROJECT_ID']}/databases/(default)/documents/siteFiles/{doc_id}?key={os.environ['FIREBASE_KEY']}"
-          
+
           response = requests.get(url)
           data = response.json()
-          
+
           if 'fields' not in data:
               print("Error: Document not found")
               exit(1)
 
-          # CHANGE: We now create a folder named after the Site ID
           site_folder = os.path.join('out', os.environ['SITE_ID'])
           os.makedirs(site_folder, exist_ok=True)
 
           files = data['fields']['files']['arrayValue']['values']
+
+          data_url_re = re.compile(r'^data:(.+?);base64,(.+)$', re.DOTALL)
+
           for file_obj in files:
               f = file_obj['mapValue']['fields']
               path = f['path']['stringValue']
               content = f['content']['stringValue']
-              
+
               full_path = os.path.join(site_folder, path)
               os.makedirs(os.path.dirname(full_path), exist_ok=True)
-              
-              with open(full_path, 'w', encoding='utf-8') as f_out:
-                  f_out.write(content)
+
+              match = data_url_re.match(content)
+
+              if match:
+                  # 🔥 Binary file (image/audio/video/etc)
+                  base64_data = match.group(2)
+                  binary = base64.b64decode(base64_data)
+
+                  with open(full_path, 'wb') as out:
+                      out.write(binary)
+
+                  print(f"[decoded] {path}")
+              else:
+                  # 📝 Text file (html/css/js/json/etc)
+                  with open(full_path, 'w', encoding='utf-8') as out:
+                      out.write(content)
+
+                  print(f"[text] {path}")
           EOF
+
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
