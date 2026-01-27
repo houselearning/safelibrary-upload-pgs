@@ -24,6 +24,20 @@
     /* Progress Bar */
     #progress-container { width: 100%; background-color: #f3f3f3; border-radius: 4px; margin-top: 15px; display: none; }
     #progress-bar { width: 0%; height: 20px; background-color: #4CAF50; border-radius: 4px; text-align: center; line-height: 20px; color: white; font-size: 12px; transition: width 0.3s; }
+
+    /* Context Menu Styling */
+    #context-menu {
+      display: none;
+      position: absolute;
+      background: white;
+      border: 1px solid #ccc;
+      box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+      z-index: 2000;
+      min-width: 120px;
+    }
+    #context-menu ul { list-style: none; margin: 0; padding: 5px; }
+    #context-menu li { padding: 8px 12px; cursor: pointer; color: #d32f2f; }
+    #context-menu li:hover { background: #f5f5f5; }
   </style>
 </head>
 
@@ -54,6 +68,7 @@
       <div class="tree-actions">
         <button id="new-folder-btn">New Folder</button>
         <button id="upload-files-btn">Upload Files</button>
+        <button id="save-all-btn" style="background-color: #2196F3; color: white;">Save All</button>
         <input type="file" id="file-input" multiple webkitdirectory directory style="display:none;" />
       </div>
 
@@ -73,6 +88,12 @@
       <button id="save-file-btn">Save Changes</button>
     </section>
   </main>
+
+  <div id="context-menu">
+    <ul>
+      <li id="delete-tree-item">Delete</li>
+    </ul>
+  </div>
 
   <div id="settings-modal" class="modal">
     <div class="modal-content">
