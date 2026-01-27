@@ -65,12 +65,15 @@
       
       <p class="site-url">URL: <code id="site-url"></code></p>
 
-      <div class="tree-actions">
-        <button id="new-folder-btn">New Folder</button>
-        <button id="upload-files-btn">Upload Files</button>
-        <button id="save-all-btn" style="background-color: #2196F3; color: white;">Save All</button>
-        <input type="file" id="file-input" multiple webkitdirectory directory style="display:none;" />
-      </div>
+<div class="tree-actions">
+  <button id="new-folder-btn">New Folder</button>
+  <button id="upload-files-btn">Upload File</button>
+  <button id="upload-folder-btn">Upload Folder</button>
+  <button id="save-all-btn" style="background-color: #2196F3; color: white;">Save All</button>
+  
+  <input type="file" id="file-input" multiple style="display:none;" />
+  <input type="file" id="folder-input" multiple webkitdirectory directory style="display:none;" />
+</div>
 
       <ul id="file-tree" class="treeview"></ul>
 
