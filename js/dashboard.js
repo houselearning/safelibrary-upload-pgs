@@ -1,6 +1,5 @@
 // dashboard.js
 document.addEventListener("DOMContentLoaded", () => {
-  // UI elements
   const sitesList = document.getElementById("sites-list");
   const treePanel = document.getElementById("tree-panel");
   const fileTree = document.getElementById("file-tree");
@@ -13,135 +12,157 @@ document.addEventListener("DOMContentLoaded", () => {
   const fileInput = document.getElementById("file-input");
   const saveFileBtn = document.getElementById("save-file-btn");
 
-  // State
+  // Settings Elements
+  const settingsBtn = document.getElementById("settings-btn");
+  const settingsModal = document.getElementById("settings-modal");
+  const closeModal = document.getElementById("close-modal");
+  const renameSlugInput = document.getElementById("rename-slug-input");
+  const saveSlugBtn = document.getElementById("save-slug-btn");
+  const slugStatus = document.getElementById("slug-status");
+  const deleteSiteBtn = document.getElementById("delete-site-btn");
+
   let currentUser = null;
   let currentSite = null;
   let currentFiles = [];
 
   function resetUI() {
-    if (treePanel) treePanel.classList.add("hidden");
-    if (editorPanel) editorPanel.classList.add("hidden");
-    if (deployBtn) deployBtn.disabled = true;
-    if (deployStatus) deployStatus.textContent = "";
-    if (fileTree) fileTree.innerHTML = "";
+    treePanel.classList.add("hidden");
+    editorPanel.classList.add("hidden");
+    deployBtn.disabled = true;
+    deployStatus.textContent = "";
+    fileTree.innerHTML = "";
   }
 
-  resetUI();
-
-  // Auth observer
   firebase.auth().onAuthStateChanged(async (user) => {
-    try {
-      if (!user) {
-        window.location.href = "index.html";
-        return;
-      }
-      currentUser = user;
-      document.getElementById("user-email").textContent = user.email;
-      if (typeof ensureUserDoc === "function") {
-        await ensureUserDoc(user);
-      }
-      await loadSites();
-    } catch (err) {
-      console.error("Auth error", err);
-    }
+    if (!user) { window.location.href = "index.html"; return; }
+    currentUser = user;
+    document.getElementById("user-email").textContent = user.email;
+    if (typeof ensureUserDoc === "function") await ensureUserDoc(user);
+    await loadSites();
   });
 
   async function loadSites() {
-    try {
-      const sites = typeof getUserSites === "function" ? await getUserSites(currentUser.uid) : [];
-      sitesList.innerHTML = "";
-      if (sites.length === 0) {
-        sitesList.innerHTML = "<li>No sites yet</li>";
-        return;
-      }
-      sites.forEach((site) => {
-        const li = document.createElement("li");
-        li.textContent = site.name || site.siteId;
-        li.onclick = () => openSite(site);
-        sitesList.appendChild(li);
-      });
-    } catch (err) {
-      console.error("loadSites error", err);
-    }
+    const sites = typeof getUserSites === "function" ? await getUserSites(currentUser.uid) : [];
+    sitesList.innerHTML = sites.length ? "" : "<li>No sites yet</li>";
+    sites.forEach(site => {
+      const li = document.createElement("li");
+      li.textContent = site.name || site.siteId;
+      li.onclick = () => openSite(site);
+      sitesList.appendChild(li);
+    });
   }
 
   async function openSite(site) {
-    try {
-      currentSite = site;
-      treePanel.classList.remove("hidden");
-      editorPanel.classList.add("hidden");
-      deployStatus.textContent = "Loading files...";
-      
-      currentFiles = typeof getSiteFiles === "function" ? await getSiteFiles(currentUser.uid, site.siteId) : [];
-      renderFileTree();
-      
-      deployBtn.disabled = false;
-      deployStatus.textContent = "";
-      document.getElementById("site-title").textContent = site.name;
-      document.getElementById("site-url").textContent = `pages.houselearning.org/${site.siteId}/`;
-    } catch (err) {
-      console.error("openSite error", err);
-      deployStatus.textContent = "Failed to load files";
-    }
+    currentSite = site;
+    treePanel.classList.remove("hidden");
+    editorPanel.classList.add("hidden");
+    deployStatus.textContent = "Loading...";
+    currentFiles = typeof getSiteFiles === "function" ? await getSiteFiles(currentUser.uid, site.siteId) : [];
+    renderFileTree();
+    deployBtn.disabled = false;
+    deployStatus.textContent = "";
+    document.getElementById("site-title").textContent = site.name;
+    const displayId = site.customSlug || site.siteId;
+    document.getElementById("site-url").textContent = `pages.houselearning.org/${displayId}/`;
   }
 
-  // --- SAVE LOGIC ---
+  // --- SETTINGS LOGIC ---
+  settingsBtn.onclick = () => {
+    settingsModal.style.display = "block";
+    renameSlugInput.value = currentSite.customSlug || "";
+    slugStatus.textContent = "";
+  };
+  
+  closeModal.onclick = () => settingsModal.style.display = "none";
+  window.onclick = (e) => { if (e.target == settingsModal) settingsModal.style.display = "none"; };
+
+  saveSlugBtn.onclick = async () => {
+    const newSlug = renameSlugInput.value.trim().replace(/[^a-zA-Z0-9-]/g, "");
+    if (!newSlug) return alert("Please enter a valid slug");
+    
+    slugStatus.textContent = "Checking availability...";
+    
+    try {
+      // Check if slug is taken by someone else
+      const db = firebase.firestore();
+      const snapshot = await db.collection("sites").where("customSlug", "==", newSlug).get();
+      
+      if (!snapshot.empty && snapshot.docs[0].id !== currentSite.siteId) {
+        slugStatus.textContent = "Error: That name is already taken.";
+        slugStatus.style.color = "red";
+        return;
+      }
+
+      // Update the record
+      await db.collection("users").doc(currentUser.uid).collection("sites").doc(currentSite.siteId).update({
+        customSlug: newSlug
+      });
+      
+      currentSite.customSlug = newSlug;
+      slugStatus.textContent = "Slug updated successfully!";
+      slugStatus.style.color = "green";
+      document.getElementById("site-url").textContent = `pages.houselearning.org/${newSlug}/`;
+    } catch (err) {
+      slugStatus.textContent = "Update failed: " + err.message;
+    }
+  };
+
+  deleteSiteBtn.onclick = async () => {
+    if (!confirm("Are you absolutely sure? This cannot be undone.")) return;
+    try {
+      const db = firebase.firestore();
+      // 1. Delete site files record
+      await db.collection("siteFiles").doc(`${currentUser.uid}_${currentSite.siteId}`).delete();
+      // 2. Delete site metadata
+      await db.collection("users").doc(currentUser.uid).collection("sites").doc(currentSite.siteId).delete();
+      
+      alert("Site deleted.");
+      settingsModal.style.display = "none";
+      resetUI();
+      await loadSites();
+    } catch (err) { alert("Delete failed: " + err.message); }
+  };
+
+  // --- SAVE & DEPLOY LOGIC ---
   async function saveCurrentWebsite() {
     if (!currentSite || !currentUser) return false;
-    try {
-      // Capture current editor content if a file is open
-      const path = editorFilename.textContent;
-      if (path && editorPanel.offsetParent !== null) {
-        const content = editorContent.value;
-        currentFiles = currentFiles.filter((f) => f.path !== path);
-        currentFiles.push({ path, content, contentType: "text/plain" });
-      }
-
-      if (typeof saveSiteFiles === "function") {
-        await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
-        renderFileTree();
-        return true;
-      }
-      return false;
-    } catch (err) {
-      console.error("Save error", err);
-      return false;
+    const path = editorFilename.textContent;
+    if (path && editorPanel.offsetParent !== null) {
+      const content = editorContent.value;
+      currentFiles = currentFiles.filter(f => f.path !== path);
+      currentFiles.push({ path, content, contentType: "text/plain" });
     }
+    if (typeof saveSiteFiles === "function") {
+      await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
+      renderFileTree();
+      return true;
+    }
+    return false;
   }
 
-  if (saveFileBtn) {
-    saveFileBtn.addEventListener("click", async () => {
-      deployStatus.textContent = "Saving...";
-      const ok = await saveCurrentWebsite();
-      deployStatus.textContent = ok ? "Saved successfully!" : "Save failed.";
-      setTimeout(() => { if (deployStatus.textContent.includes("Saved")) deployStatus.textContent = ""; }, 2000);
-    });
-  }
+  saveFileBtn.onclick = async () => {
+    deployStatus.textContent = "Saving...";
+    if (await saveCurrentWebsite()) {
+      deployStatus.textContent = "Saved!";
+      setTimeout(() => deployStatus.textContent = "", 2000);
+    }
+  };
 
-  // --- DEPLOY LOGIC (WITH AUTO-SAVE) ---
-  if (deployBtn) {
-    deployBtn.addEventListener("click", async () => {
-      try {
-        deployBtn.disabled = true;
-        deployStatus.textContent = "Saving latest changes...";
-        
-        const saveOk = await saveCurrentWebsite();
-        if (!saveOk) throw new Error("Could not save files before deployment.");
+  deployBtn.onclick = async () => {
+    deployBtn.disabled = true;
+    deployStatus.textContent = "Saving...";
+    if (await saveCurrentWebsite()) {
+      deployStatus.textContent = "Deploying...";
+      // Pass the customSlug if it exists so GitHub builds into the right folder
+      const deployFolder = currentSite.customSlug || currentSite.siteId;
+      await dispatchDeploy(currentUser.uid, currentSite.siteId, currentFiles);
+      const url = `https://pages.houselearning.org/${deployFolder}/`;
+      deployStatus.innerHTML = `Success! <br> <a href="${url}" target="_blank">View Site</a>`;
+    }
+    deployBtn.disabled = false;
+  };
 
-        deployStatus.textContent = "Triggering deployment...";
-        await dispatchDeploy(currentUser.uid, currentSite.siteId, currentFiles);
-        
-        const siteUrl = `https://pages.houselearning.org/${currentSite.siteId}/`;
-        deployStatus.innerHTML = `Deployed successfully! <br> <a href="${siteUrl}" target="_blank" style="color: blue; text-decoration: underline;">View Live Site</a>`;
-      } catch (err) {
-        deployStatus.textContent = "Deploy failed: " + err.message;
-      } finally {
-        deployBtn.disabled = false;
-      }
-    });
-  }
-
-  // --- FILE TREE & EDITOR ---
+  // --- TREE VIEW ---
   function renderFileTree() {
     fileTree.innerHTML = "";
     const tree = buildTree(currentFiles);
@@ -154,7 +175,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function buildTree(files) {
     const root = {};
-    files.forEach((f) => {
+    files.forEach(f => {
       const parts = f.path.split("/").filter(Boolean);
       let node = root;
       parts.forEach((part, idx) => {
@@ -166,12 +187,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderTree(node, parentEl, onFileClick) {
-    Object.keys(node).sort().forEach((name) => {
+    Object.keys(node).sort().forEach(name => {
       const item = node[name];
       const li = document.createElement("li");
       if (item.__isFile) {
         li.textContent = name;
-        li.className = "file-item";
         li.onclick = () => onFileClick(item.__data);
       } else {
         li.textContent = "[Folder] " + name;
@@ -183,26 +203,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Create site and File upload listeners (Keep as they were)
-  if (createSiteBtn) {
-    createSiteBtn.addEventListener("click", async () => {
-      const name = prompt("Site name");
-      if (name) {
-        const { siteId } = await createSite(currentUser.uid, name);
-        await loadSites();
-      }
-    });
-  }
-
-  document.getElementById("upload-files-btn").onclick = () => fileInput.click();
-  fileInput.addEventListener("change", async (ev) => {
-    const files = Array.from(ev.target.files);
-    for (const f of files) {
-      const text = await f.text();
-      const path = f.webkitRelativePath || f.name;
-      currentFiles = currentFiles.filter(x => x.path !== path);
-      currentFiles.push({ path, content: text });
-    }
-    await saveCurrentWebsite();
-  });
+  createSiteBtn.onclick = async () => {
+    const name = prompt("Site name");
+    if (name) { await createSite(currentUser.uid, name); await loadSites(); }
+  };
 });
