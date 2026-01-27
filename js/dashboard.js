@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
-  // Elements
+  // --- UI Elements ---
   const sitesList = document.getElementById("sites-list");
   const treePanel = document.getElementById("tree-panel");
   const fileTree = document.getElementById("file-tree");
@@ -26,21 +26,27 @@ document.addEventListener("DOMContentLoaded", () => {
   const deleteSiteBtn = document.getElementById("delete-site-btn");
   const contextMenu = document.getElementById("context-menu");
   const deleteTreeItem = document.getElementById("delete-tree-item");
+  const renameTreeItem = document.getElementById("rename-tree-item");
 
+  // --- State Variables ---
   let currentUser = null;
   let currentSite = null;
   let currentFiles = [];
   let rightClickedItem = null;
 
-  // --- AUTH & INITIALIZATION ---
+  // --- Authentication ---
   firebase.auth().onAuthStateChanged(async (user) => {
-    if (!user) { window.location.href = "index.html"; return; }
+    if (!user) { 
+      window.location.href = "index.html"; 
+      return; 
+    }
     currentUser = user;
     document.getElementById("user-email").textContent = user.email;
     if (typeof ensureUserDoc === "function") await ensureUserDoc(user);
     await loadSites();
   });
 
+  // --- Site Management ---
   async function loadSites() {
     const sites = typeof getUserSites === "function" ? await getUserSites(currentUser.uid) : [];
     sitesList.innerHTML = sites.length ? "" : "<li>No sites yet</li>";
@@ -66,11 +72,20 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("site-url").textContent = `pages.houselearning.org/${displayId}/`;
   }
 
-  // --- SAVE ALL LOGIC (With Textbox Sync) ---
+  // --- Persistence Logic ---
+  async function saveCurrentWebsite() {
+    if (!currentSite || !currentUser) return false;
+    if (typeof saveSiteFiles === "function") {
+      await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
+      return true;
+    }
+    return false;
+  }
+
   const performSaveAll = async () => {
     if (!currentSite) return;
 
-    // Sync editor content into the array
+    // Sync editor content into the currentFiles array before saving to DB
     const openFilePath = editorFilename.textContent;
     if (openFilePath && !editorPanel.classList.contains("hidden")) {
       const fileIndex = currentFiles.findIndex(f => f.path === openFilePath);
@@ -89,6 +104,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   saveAllBtn.onclick = performSaveAll;
+  saveFileBtn.onclick = performSaveAll;
 
   // Keyboard shortcut Ctrl+S
   document.addEventListener("keydown", (e) => {
@@ -98,8 +114,35 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // --- CONTEXT MENU & DELETION ---
+  // --- Context Menu Actions (Rename & Delete) ---
   window.addEventListener("click", () => { contextMenu.style.display = "none"; });
+
+  renameTreeItem.onclick = async () => {
+    if (!rightClickedItem || !currentSite) return;
+    const { path, isFile } = rightClickedItem;
+    const parts = path.split('/');
+    const oldName = parts.pop();
+    const parentPath = parts.join('/');
+
+    const newName = prompt(`Rename "${oldName}" to:`, oldName);
+    if (newName && newName !== oldName) {
+      const newPath = parentPath ? `${parentPath}/${newName}` : newName;
+      
+      if (isFile) {
+        currentFiles = currentFiles.map(f => f.path === path ? { ...f, path: newPath } : f);
+      } else {
+        const oldPrefix = path + "/";
+        const newPrefix = newPath + "/";
+        currentFiles = currentFiles.map(f => {
+          if (f.path === path) return { ...f, path: newPath };
+          if (f.path.startsWith(oldPrefix)) return { ...f, path: f.path.replace(oldPrefix, newPrefix) };
+          return f;
+        });
+      }
+      renderFileTree();
+      await saveCurrentWebsite();
+    }
+  };
 
   deleteTreeItem.onclick = async () => {
     if (!rightClickedItem || !currentSite) return;
@@ -117,10 +160,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  // --- DRAG & DROP LOGIC ---
+  // --- Drag & Drop Core Logic ---
   async function moveItem(oldPath, targetFolder, isFile) {
     const fileName = oldPath.split('/').pop();
-    // If target folder is empty string (root), path is just fileName
     const newPath = targetFolder ? `${targetFolder}/${fileName}` : fileName;
 
     if (newPath === oldPath) return;
@@ -136,24 +178,24 @@ document.addEventListener("DOMContentLoaded", () => {
         return f;
       });
     }
-
     renderFileTree();
     await saveCurrentWebsite();
   }
 
-  // Root drop target setup
-  treeRootDrop.ondragover = (e) => { e.preventDefault(); treeRootDrop.classList.add("drag-over"); };
-  treeRootDrop.ondragleave = () => treeRootDrop.classList.remove("drag-over");
-  treeRootDrop.ondrop = (e) => {
-    e.preventDefault();
-    treeRootDrop.classList.remove("drag-over");
-    const data = JSON.parse(e.dataTransfer.getData("application/json"));
-    moveItem(data.path, "", data.isFile);
-  };
+  if (treeRootDrop) {
+    treeRootDrop.ondragover = (e) => { e.preventDefault(); treeRootDrop.classList.add("drag-over"); };
+    treeRootDrop.ondragleave = () => treeRootDrop.classList.remove("drag-over");
+    treeRootDrop.ondrop = (e) => {
+      e.preventDefault();
+      treeRootDrop.classList.remove("drag-over");
+      const data = JSON.parse(e.dataTransfer.getData("application/json"));
+      moveItem(data.path, "", data.isFile);
+    };
+  }
 
-  // --- UPLOAD HANDLERS ---
+  // --- Upload Handlers ---
   uploadFilesBtn.onclick = () => fileInput.click();
-  uploadFolderBtn.onclick = () => folderInput.click();
+  if (uploadFolderBtn) uploadFolderBtn.onclick = () => folderInput.click();
 
   async function handleUpload(ev) {
     const files = Array.from(ev.target.files || []);
@@ -177,18 +219,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   fileInput.addEventListener("change", handleUpload);
-  folderInput.addEventListener("change", handleUpload);
+  if (folderInput) folderInput.addEventListener("change", handleUpload);
 
-  async function saveCurrentWebsite() {
-    if (!currentSite || !currentUser) return false;
-    if (typeof saveSiteFiles === "function") {
-      await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
-      return true;
-    }
-    return false;
-  }
-
-  // --- TREE VIEW RENDERING ---
+  // --- Tree View Rendering ---
   function renderFileTree() {
     fileTree.innerHTML = "";
     const tree = buildTree(currentFiles);
@@ -229,8 +262,12 @@ document.addEventListener("DOMContentLoaded", () => {
         renderTree(item.children, ul, onFileClick, fullPath);
         li.appendChild(ul);
 
-        // Folders are drop targets
-        li.ondragover = (e) => { e.preventDefault(); e.stopPropagation(); li.classList.add("drag-over"); };
+        // Folders serve as drop targets
+        li.ondragover = (e) => { 
+          e.preventDefault(); 
+          e.stopPropagation(); 
+          li.classList.add("drag-over"); 
+        };
         li.ondragleave = () => li.classList.remove("drag-over");
         li.ondrop = (e) => {
           e.preventDefault();
@@ -242,6 +279,7 @@ document.addEventListener("DOMContentLoaded", () => {
         };
       }
 
+      // Drag sources
       li.ondragstart = (e) => {
         e.stopPropagation();
         e.dataTransfer.setData("application/json", JSON.stringify({ path: fullPath, isFile: item.__isFile }));
@@ -249,6 +287,7 @@ document.addEventListener("DOMContentLoaded", () => {
       };
       li.ondragend = () => li.style.opacity = "1";
 
+      // Context menu trigger
       li.oncontextmenu = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -262,8 +301,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // --- BUTTON ACTIONS ---
-  saveFileBtn.onclick = performSaveAll;
+  // --- Deployment & Settings ---
   deployBtn.onclick = async () => {
     deployBtn.disabled = true;
     deployStatus.textContent = "Deploying...";
@@ -274,6 +312,9 @@ document.addEventListener("DOMContentLoaded", () => {
     deployBtn.disabled = false;
   };
 
-  settingsBtn.onclick = () => { settingsModal.style.display = "block"; renameSlugInput.value = currentSite.customSlug || ""; };
+  settingsBtn.onclick = () => { 
+    settingsModal.style.display = "block"; 
+    renameSlugInput.value = currentSite.customSlug || ""; 
+  };
   closeModal.onclick = () => settingsModal.style.display = "none";
 });
