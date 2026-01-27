@@ -40,17 +40,23 @@ jobs:
           data = response.json()
           
           if 'fields' not in data:
-              print("Error: Document not found in Firestore")
+              print("Error: Document not found")
               exit(1)
 
-          os.makedirs('public', exist_ok=True)
+          # CHANGE: We now create a folder named after the Site ID
+          site_folder = os.path.join('out', os.environ['SITE_ID'])
+          os.makedirs(site_folder, exist_ok=True)
+
           files = data['fields']['files']['arrayValue']['values']
           for file_obj in files:
               f = file_obj['mapValue']['fields']
               path = f['path']['stringValue']
               content = f['content']['stringValue']
-              os.makedirs(os.path.dirname(os.path.join('public', path)), exist_ok=True)
-              with open(os.path.join('public', path), 'w', encoding='utf-8') as f_out:
+              
+              full_path = os.path.join(site_folder, path)
+              os.makedirs(os.path.dirname(full_path), exist_ok=True)
+              
+              with open(full_path, 'w', encoding='utf-8') as f_out:
                   f_out.write(content)
           EOF
 
@@ -58,4 +64,5 @@ jobs:
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./public
+          publish_dir: ./out
+          keep_files: true
