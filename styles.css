@@ -1,0 +1,63 @@
+.dashboard-container {
+  display: flex;
+  height: calc(100vh - 60px);
+}
+
+.sites-panel,
+.tree-panel,
+.editor-panel {
+  padding: 1rem;
+  border-right: 1px solid #ddd;
+  overflow-y: auto;
+}
+
+.sites-panel {
+  width: 220px;
+}
+
+.tree-panel {
+  width: 300px;
+}
+
+.editor-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+#editor-content {
+  flex: 1;
+  width: 100%;
+  font-family: monospace;
+  font-size: 14px;
+}
+
+.treeview {
+  list-style: none;
+  padding-left: 0;
+}
+
+.treeview .folder {
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.treeview .file {
+  cursor: pointer;
+  padding-left: 1rem;
+}
+
+.nested {
+  display: none;
+  padding-left: 1rem;
+}
+
+.active {
+  display: block;
+}
+
+.deploy-btn {
+  margin-top: 1rem;
+  background: #2ea44f;
+  color: white;
+}
