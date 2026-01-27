@@ -208,3 +208,29 @@ document.addEventListener("DOMContentLoaded", () => {
     if (name) { await createSite(currentUser.uid, name); await loadSites(); }
   };
 });
+// 1. Make the 'Upload Files' button open the hidden file input
+if (uploadFilesBtn) {
+  uploadFilesBtn.addEventListener("click", () => {
+    fileInput.click(); 
+  });
+}
+
+// 2. Handle 'New Folder' button
+if (newFolderBtn) {
+  newFolderBtn.addEventListener("click", () => {
+    const folderName = prompt("Enter folder name:");
+    if (!folderName) return;
+
+    // To create a folder in this system, we create a 'dummy' file 
+    // inside it so the path exists in Firestore.
+    const path = `${folderName}/.keep`;
+    currentFiles.push({ 
+      path: path, 
+      content: "This file keeps the folder active.", 
+      contentType: "text/plain" 
+    });
+    
+    renderFileTree();
+    saveCurrentWebsite(); // Save the new folder structure to Firestore
+  });
+}
