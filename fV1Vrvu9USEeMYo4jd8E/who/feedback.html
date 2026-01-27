@@ -1,0 +1,46 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>retro feedback</title>
+</head>
+<body>
+
+<div class="feedback-container">
+
+    <form id="feedbackForm">
+        <div class="form-group">
+            <label for="name">Full Name</label>
+            <input type="text" id="name" placeholder="John Doe" required>
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email Address</label>
+            <input type="email" id="email" placeholder="john.doe123@houselearning.org" required>
+        </div>
+
+        <div class="form-group">
+            <label for="rating">Experience Rating</label>
+            <select id="rating" required>
+                <option value="">Select a rating</option>
+                <option value="5">5 - Excellent</option>
+                <option value="4">4 - Good</option>
+                <option value="3">3 - Average</option>
+                <option value="2">2 - Poor</option>
+                <option value="1">1 - Very Poor</option>
+            </select>
+        </div>
+
+        <button type="submit" id="submitBtn">Submit Feedback</button>
+        <div id="status"></div>
+    </form>
+</div>
+
+<footer>
+   <p>&#8453; 2026 | first page</p> <a href="./trivacy.html">terms/privacy</a><a href="https://web.archive.org/web/202000000000000/https://houselearning.github.io/" title="Brings you to the web archive">old houselearning</a>
+</footer>
+    <script type="module" src="https://feedback.houselearning.org/app.js"></script>
+</body>
+</html>
