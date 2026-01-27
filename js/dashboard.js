@@ -1,4 +1,3 @@
-// dashboard.js
 document.addEventListener("DOMContentLoaded", () => {
   // Elements
   const sitesList = document.getElementById("sites-list");
@@ -15,11 +14,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const uploadFilesBtn = document.getElementById("upload-files-btn");
   const newFolderBtn = document.getElementById("new-folder-btn");
   
-  // Progress Elements
   const progressContainer = document.getElementById("progress-container");
   const progressBar = document.getElementById("progress-bar");
 
-  // Settings Elements
   const settingsBtn = document.getElementById("settings-btn");
   const settingsModal = document.getElementById("settings-modal");
   const closeModal = document.getElementById("close-modal");
@@ -38,10 +35,9 @@ document.addEventListener("DOMContentLoaded", () => {
     deployBtn.disabled = true;
     deployStatus.textContent = "";
     fileTree.innerHTML = "";
-    progressContainer.style.display = "none";
+    if (progressContainer) progressContainer.style.display = "none";
   }
 
-  // --- AUTH & LOADING ---
   firebase.auth().onAuthStateChanged(async (user) => {
     if (!user) { window.location.href = "index.html"; return; }
     currentUser = user;
@@ -62,7 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function openSite(site) {
-    currentSite = site;
+    currentSite = site; // Sets the global state so settings work
     treePanel.classList.remove("hidden");
     editorPanel.classList.add("hidden");
     deployStatus.textContent = "Loading...";
@@ -75,98 +71,50 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("site-url").textContent = `pages.houselearning.org/${displayId}/`;
   }
 
-  // --- PROGRESS BAR LOGIC ---
-  function updateProgress(percent) {
-    progressContainer.style.display = "block";
-    progressBar.style.width = percent + "%";
-    progressBar.textContent = Math.round(percent) + "%";
-    if (percent >= 100) {
-      setTimeout(() => { progressContainer.style.display = "none"; }, 1500);
-    }
-  }
-
-  // --- UPLOAD & FOLDER ACTION WIRING ---
-  uploadFilesBtn.onclick = () => fileInput.click();
-
-  fileInput.addEventListener("change", async (ev) => {
-    const files = Array.from(ev.target.files || []);
-    if (files.length === 0) return;
-
-    deployStatus.textContent = "Uploading folder...";
-    let processed = 0;
-
-    for (const f of files) {
-      const relPath = f.webkitRelativePath || f.name;
-      const text = await f.text();
-      
-      currentFiles = currentFiles.filter(x => x.path !== relPath);
-      currentFiles.push({ path: relPath, content: text, contentType: f.type || "text/plain" });
-      
-      processed++;
-      updateProgress((processed / files.length) * 100);
-    }
-
-    await saveCurrentWebsite();
-    renderFileTree();
-    deployStatus.textContent = "Upload complete!";
-  });
-
-  newFolderBtn.onclick = async () => {
-    const folderName = prompt("Enter folder name:");
-    if (!folderName) return;
-    currentFiles.push({ path: `${folderName}/.keep`, content: "Folder index", contentType: "text/plain" });
-    await saveCurrentWebsite();
-    renderFileTree();
-  };
-
-  // --- SETTINGS MODAL ---
+  // --- SETTINGS LOGIC ---
   settingsBtn.onclick = () => {
+    if (!currentSite) return alert("Select a site first");
     settingsModal.style.display = "block";
     renameSlugInput.value = currentSite.customSlug || "";
+    slugStatus.textContent = "";
   };
-  closeModal.onclick = () => settingsModal.style.display = "none";
-  window.onclick = (e) => { if (e.target == settingsModal) settingsModal.style.display = "none"; };
 
-saveSlugBtn.onclick = async () => {
+  closeModal.onclick = () => settingsModal.style.display = "none";
+
+  saveSlugBtn.onclick = async () => {
+    if (!currentSite) return alert("No active site");
     const newSlug = renameSlugInput.value.trim().replace(/[^a-zA-Z0-9-]/g, "");
-    if (!newSlug) return alert("Please enter a valid slug");
+    if (!newSlug) return alert("Invalid slug");
     
     slugStatus.textContent = "Checking availability...";
     
     try {
       const db = firebase.firestore();
-      // Check if slug is taken globally
+      // Global check
       const snapshot = await db.collection("sites").where("customSlug", "==", newSlug).get();
-      
       if (!snapshot.empty && snapshot.docs[0].id !== currentSite.siteId) {
-        slugStatus.textContent = "Error: That name is already taken.";
+        slugStatus.textContent = "Error: Name taken.";
         slugStatus.style.color = "red";
         return;
       }
 
-      // FIX: Use .set with { merge: true } instead of .update
-      // This ensures the document is created if it was missing from the user's subcollection
-      await db.collection("users")
-        .doc(currentUser.uid)
-        .collection("sites")
-        .doc(currentSite.siteId)
-        .set({
-          customSlug: newSlug,
-          uid: currentUser.uid // Storing UID helps with security rule validation
-        }, { merge: true });
+      // Use .set with merge to prevent "No document to update" error
+      await db.collection("users").doc(currentUser.uid).collection("sites").doc(currentSite.siteId).set({
+        customSlug: newSlug,
+        uid: currentUser.uid
+      }, { merge: true });
       
       currentSite.customSlug = newSlug;
-      slugStatus.textContent = "Slug updated successfully!";
+      slugStatus.textContent = "Updated!";
       slugStatus.style.color = "green";
       document.getElementById("site-url").textContent = `pages.houselearning.org/${newSlug}/`;
     } catch (err) {
-      console.error("Update error:", err);
-      slugStatus.textContent = "Update failed: " + err.message;
+      slugStatus.textContent = "Failed: " + err.message;
     }
   };
 
   deleteSiteBtn.onclick = async () => {
-    if (!confirm("Delete site?")) return;
+    if (!currentSite || !confirm("Delete site?")) return;
     const db = firebase.firestore();
     await db.collection("siteFiles").doc(`${currentUser.uid}_${currentSite.siteId}`).delete();
     await db.collection("users").doc(currentUser.uid).collection("sites").doc(currentSite.siteId).delete();
@@ -175,15 +123,34 @@ saveSlugBtn.onclick = async () => {
     settingsModal.style.display = "none";
   };
 
+  // --- UPLOAD LOGIC ---
+  uploadFilesBtn.onclick = () => fileInput.click();
+
+  fileInput.addEventListener("change", async (ev) => {
+    const files = Array.from(ev.target.files || []);
+    if (files.length === 0) return;
+    
+    progressContainer.style.display = "block";
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const relPath = f.webkitRelativePath || f.name;
+      const text = await f.text();
+      currentFiles = currentFiles.filter(x => x.path !== relPath);
+      currentFiles.push({ path: relPath, content: text, contentType: f.type || "text/plain" });
+      
+      const percent = ((i + 1) / files.length) * 100;
+      progressBar.style.width = percent + "%";
+      progressBar.textContent = Math.round(percent) + "%";
+    }
+    
+    await saveCurrentWebsite();
+    renderFileTree();
+    setTimeout(() => { progressContainer.style.display = "none"; }, 1000);
+  });
+
   // --- SAVE & DEPLOY ---
   async function saveCurrentWebsite() {
     if (!currentSite || !currentUser) return false;
-    const path = editorFilename.textContent;
-    if (path && editorPanel.offsetParent !== null) {
-      const content = editorContent.value;
-      currentFiles = currentFiles.filter(f => f.path !== path);
-      currentFiles.push({ path, content, contentType: "text/plain" });
-    }
     if (typeof saveSiteFiles === "function") {
       await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
       return true;
@@ -192,6 +159,11 @@ saveSlugBtn.onclick = async () => {
   }
 
   saveFileBtn.onclick = async () => {
+    const path = editorFilename.textContent;
+    if (path) {
+      currentFiles = currentFiles.filter(f => f.path !== path);
+      currentFiles.push({ path, content: editorContent.value, contentType: "text/plain" });
+    }
     deployStatus.textContent = "Saving...";
     if (await saveCurrentWebsite()) {
       deployStatus.textContent = "Saved!";
@@ -201,13 +173,11 @@ saveSlugBtn.onclick = async () => {
 
   deployBtn.onclick = async () => {
     deployBtn.disabled = true;
-    deployStatus.textContent = "Saving and Deploying...";
-    if (await saveCurrentWebsite()) {
-      await dispatchDeploy(currentUser.uid, currentSite.siteId, currentFiles);
-      const displayId = currentSite.customSlug || currentSite.siteId;
-      const url = `https://pages.houselearning.org/${displayId}/`;
-      deployStatus.innerHTML = `Deployed! <br> <a href="${url}" target="_blank">View Site</a>`;
-    }
+    deployStatus.textContent = "Deploying...";
+    await saveCurrentWebsite();
+    await dispatchDeploy(currentUser.uid, currentSite.siteId, currentFiles);
+    const displayId = currentSite.customSlug || currentSite.siteId;
+    deployStatus.innerHTML = `Deployed! <a href="https://pages.houselearning.org/${displayId}/" target="_blank">View</a>`;
     deployBtn.disabled = false;
   };
 
@@ -241,7 +211,6 @@ saveSlugBtn.onclick = async () => {
       const li = document.createElement("li");
       if (item.__isFile) {
         li.textContent = name;
-        li.style.cursor = "pointer";
         li.onclick = () => onFileClick(item.__data);
       } else {
         li.textContent = "📁 " + name;
@@ -252,9 +221,4 @@ saveSlugBtn.onclick = async () => {
       parentEl.appendChild(li);
     });
   }
-
-  createSiteBtn.onclick = async () => {
-    const name = prompt("Site name");
-    if (name) { await createSite(currentUser.uid, name); await loadSites(); }
-  };
 });
