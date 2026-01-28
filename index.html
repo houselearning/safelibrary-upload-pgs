@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HouseLearning Pages</title>
+  <link rel="stylesheet" href="styles.css" />
+
+  <style>
+    body {
+      background: #fff;
+      color: #000;
+    }
+
+    .hero {
+      text-align: center;
+      padding: 80px 20px;
+    }
+
+    .hero h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      color: #000;
+    }
+
+    .hero p {
+      font-size: 1.2rem;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto 30px;
+    }
+
+    .cta-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-top: 20px;
+    }
+
+    .cta-buttons a {
+      padding: 12px 22px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: bold;
+      border: 1px solid #000;
+      color: #000;
+      background: transparent;
+      transition: 0.2s;
+    }
+
+    .cta-buttons a:hover {
+      background: #eaeaea;
+    }
+
+    header.topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 20px;
+      border-bottom: 1px solid #ccc;
+      background: #fff;
+      color: #000;
+    }
+
+    header.topbar a {
+      color: #000;
+      text-decoration: none;
+      margin-left: 10px;
+    }
+
+    header.topbar a:hover {
+      text-decoration: underline;
+    }
+
+    footer {
+      margin-top: 80px;
+      text-align: center;
+      color: #555;
+      font-size: 0.9rem;
+      padding-bottom: 20px;
+    }
+  </style>
+
+  <!-- Firebase SDK -->
+  <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-auth-compat.js"></script>
+<script src="https://houselearning.org/cookiebanner.js"></script>
+<script src="https://houselearning.org/feedback.js"></script>
+  <script src="https://houselearning.org/meta/basic-api.js">
+
+  </script>
+</head>
+
+<body>
+  <header class="topbar">
+    <h1>HouseLearning Pages</h1>
+    <div>
+      <a href="login.html">Login</a>
+      <a href="signup.html">Create Account</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>Build and Publish Your Own Website</h1>
+      <p>
+        HouseLearning Pages lets you create, edit, and deploy static websites for free.
+        No servers, no setup — just your content, instantly published under
+        <code>pages.houselearning.org</code>.
+      </p>
+
+      <div class="cta-buttons">
+        <a href="signup.html">Get Started</a>
+        <a href="login.html">Sign In</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    © <span id="year"></span> HouseLearning. All rights reserved.
+  </footer>
+
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
