@@ -7,28 +7,44 @@
 
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- Firebase SDK -->
+  <!-- Firebase SDKs (COMPAT) -->
   <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore-compat.js"></script>
 
+  <!-- Firebase init -->
   <script defer src="js/firebase-init.js"></script>
-  <script defer src="js/auth.js"></script>
 </head>
 
 <body>
   <main class="container">
     <h1>HouseLearning Pages</h1>
-    <p>Create and deploy static websites for free under <code>pages.houselearning.org</code>.</p>
+    <p>
+      Create and deploy static websites for free under
+      <code>pages.houselearning.org</code>.
+    </p>
 
     <section id="auth-section">
       <div id="login-form">
         <h2>Sign in</h2>
 
+        <!-- Email / Password -->
         <input type="email" id="email" placeholder="Email" autocomplete="email" />
         <input type="password" id="password" placeholder="Password" autocomplete="current-password" />
 
         <button id="login-btn">Continue</button>
+
+        <div class="oauth-divider">or</div>
+
+        <!-- OAuth buttons -->
+        <button id="google-btn" class="oauth google">
+          Continue with Google
+        </button>
+
+        <button id="github-btn" class="oauth github">
+          Continue with GitHub
+        </button>
+
         <p id="auth-error" class="error"></p>
 
         <p style="margin-top: 10px;">
@@ -40,11 +56,13 @@
   </main>
 
   <script>
-    // Wait for Firebase to load
     document.addEventListener("DOMContentLoaded", () => {
       const auth = firebase.auth();
 
       const loginBtn = document.getElementById("login-btn");
+      const googleBtn = document.getElementById("google-btn");
+      const githubBtn = document.getElementById("github-btn");
+
       const emailInput = document.getElementById("email");
       const passInput = document.getElementById("password");
       const errorBox = document.getElementById("auth-error");
@@ -56,6 +74,7 @@
         }
       });
 
+      // EMAIL + PASSWORD LOGIN
       loginBtn.addEventListener("click", async () => {
         const email = emailInput.value.trim();
         const pass = passInput.value;
@@ -79,6 +98,32 @@
 
         loginBtn.disabled = false;
         loginBtn.textContent = "Continue";
+      });
+
+      // GOOGLE LOGIN
+      googleBtn.addEventListener("click", async () => {
+        errorBox.textContent = "";
+        const provider = new firebase.auth.GoogleAuthProvider();
+
+        try {
+          await auth.signInWithPopup(provider);
+          window.location.href = "dashboard.html";
+        } catch (err) {
+          errorBox.textContent = err.message;
+        }
+      });
+
+      // GITHUB LOGIN
+      githubBtn.addEventListener("click", async () => {
+        errorBox.textContent = "";
+        const provider = new firebase.auth.GithubAuthProvider();
+
+        try {
+          await auth.signInWithPopup(provider);
+          window.location.href = "dashboard.html";
+        } catch (err) {
+          errorBox.textContent = err.message;
+        }
       });
     });
   </script>
