@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create Account – HouseLearning Pages</title>
+
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Firebase SDK -->
+  <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-auth-compat.js"></script>
+
+  <script defer src="js/firebase-init.js"></script>
+  <script defer src="js/auth.js"></script>
+</head>
+
+<body>
+  <main class="container">
+    <h1>Create Account</h1>
+
+    <section id="signup-section">
+      <div id="signup-form">
+        <input type="email" id="email" placeholder="Email" autocomplete="email" />
+        <input type="password" id="password" placeholder="Password" autocomplete="new-password" />
+        <input type="password" id="confirm-password" placeholder="Confirm Password" autocomplete="new-password" />
+
+        <button id="signup-btn">Create Account</button>
+        <p id="signup-error" class="error"></p>
+
+        <p style="margin-top: 10px;">
+          Already have an account?
+          <a href="index.html">Sign in</a>
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const auth = firebase.auth();
+
+      const signupBtn = document.getElementById("signup-btn");
+      const emailInput = document.getElementById("email");
+      const passInput = document.getElementById("password");
+      const confirmInput = document.getElementById("confirm-password");
+      const errorBox = document.getElementById("signup-error");
+
+      signupBtn.addEventListener("click", async () => {
+        const email = emailInput.value.trim();
+        const pass = passInput.value;
+        const confirm = confirmInput.value;
+
+        errorBox.textContent = "";
+
+        if (!email || !pass || !confirm) {
+          errorBox.textContent = "Please fill out all fields.";
+          return;
+        }
+
+        if (pass !== confirm) {
+          errorBox.textContent = "Passwords do not match.";
+          return;
+        }
+
+        signupBtn.disabled = true;
+        signupBtn.textContent = "Creating...";
+
+        try {
+          await auth.createUserWithEmailAndPassword(email, pass);
+          window.location.href = "dashboard.html";
+        } catch (err) {
+          errorBox.textContent = err.message;
+        }
+
+        signupBtn.disabled = false;
+        signupBtn.textContent = "Create Account";
+      });
+    });
+  </script>
+</body>
+</html>
