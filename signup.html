@@ -7,12 +7,12 @@
 
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- Firebase SDK -->
+  <!-- Firebase SDKs (COMPAT) -->
   <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/11.0.0/firebase-auth-compat.js"></script>
 
+  <!-- Your Firebase init -->
   <script defer src="js/firebase-init.js"></script>
-  <script defer src="js/auth.js"></script>
 </head>
 
 <body>
@@ -21,17 +21,32 @@
 
     <section id="signup-section">
       <div id="signup-form">
+
+        <!-- Email / Password -->
         <input type="email" id="email" placeholder="Email" autocomplete="email" />
         <input type="password" id="password" placeholder="Password" autocomplete="new-password" />
         <input type="password" id="confirm-password" placeholder="Confirm Password" autocomplete="new-password" />
 
         <button id="signup-btn">Create Account</button>
+
+        <div class="oauth-divider">or</div>
+
+        <!-- OAuth -->
+        <button id="google-btn" class="oauth google">
+          Continue with Google
+        </button>
+
+        <button id="github-btn" class="oauth github">
+          Continue with GitHub
+        </button>
+
         <p id="signup-error" class="error"></p>
 
-        <p style="margin-top: 10px;">
+        <p style="margin-top: 12px;">
           Already have an account?
           <a href="index.html">Sign in</a>
         </p>
+
       </div>
     </section>
   </main>
@@ -41,11 +56,15 @@
       const auth = firebase.auth();
 
       const signupBtn = document.getElementById("signup-btn");
+      const googleBtn = document.getElementById("google-btn");
+      const githubBtn = document.getElementById("github-btn");
+
       const emailInput = document.getElementById("email");
       const passInput = document.getElementById("password");
       const confirmInput = document.getElementById("confirm-password");
       const errorBox = document.getElementById("signup-error");
 
+      // EMAIL + PASSWORD SIGNUP
       signupBtn.addEventListener("click", async () => {
         const email = emailInput.value.trim();
         const pass = passInput.value;
@@ -75,6 +94,32 @@
 
         signupBtn.disabled = false;
         signupBtn.textContent = "Create Account";
+      });
+
+      // GOOGLE SIGN-IN
+      googleBtn.addEventListener("click", async () => {
+        errorBox.textContent = "";
+        const provider = new firebase.auth.GoogleAuthProvider();
+
+        try {
+          await auth.signInWithPopup(provider);
+          window.location.href = "dashboard.html";
+        } catch (err) {
+          errorBox.textContent = err.message;
+        }
+      });
+
+      // GITHUB SIGN-IN
+      githubBtn.addEventListener("click", async () => {
+        errorBox.textContent = "";
+        const provider = new firebase.auth.GithubAuthProvider();
+
+        try {
+          await auth.signInWithPopup(provider);
+          window.location.href = "dashboard.html";
+        } catch (err) {
+          errorBox.textContent = err.message;
+        }
       });
     });
   </script>
