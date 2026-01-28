@@ -28,11 +28,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const deleteTreeItem = document.getElementById("delete-tree-item");
   const renameTreeItem = document.getElementById("rename-tree-item");
 
-  // --- Icon UI Elements ---
+  // --- Icon & Storage UI Elements ---
   const iconInput = document.getElementById("icon-input");
   const saveIconBtn = document.getElementById("save-icon-btn");
   const iconStatus = document.getElementById("icon-status");
   const clearIconBtn = document.getElementById("clear-icon-btn");
+  const storageBar = document.getElementById("storage-bar");
+  const storageText = document.getElementById("storage-text");
 
   // --- State Variables ---
   let currentUser = null;
@@ -40,6 +42,8 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentFiles = [];
   let rightClickedItem = null;
   let pendingIcon = null;
+  const STORAGE_LIMIT_MIB = 1;
+  const STORAGE_LIMIT_BYTES = STORAGE_LIMIT_MIB * 1024 * 1024;
 
   // --- Authentication ---
   firebase.auth().onAuthStateChanged(async (user) => {
@@ -52,6 +56,28 @@ document.addEventListener("DOMContentLoaded", () => {
     if (typeof ensureUserDoc === "function") await ensureUserDoc(user);
     await loadSites();
   });
+
+  // --- Utility: Storage Calculation ---
+  function updateStorageUI() {
+    let totalBytes = 0;
+    currentFiles.forEach(file => {
+      // Approximate byte size based on content length
+      if (file.content) {
+        totalBytes += new Blob([file.content]).size;
+      }
+    });
+
+    const usedMiB = (totalBytes / (1024 * 1024)).toFixed(2);
+    const percent = Math.min((totalBytes / STORAGE_LIMIT_BYTES) * 100, 100);
+
+    if (storageBar) storageBar.style.width = percent + "%";
+    if (storageText) storageText.textContent = `${usedMiB} / ${STORAGE_LIMIT_MIB} MiB`;
+
+    // Visual warning if storage is over 90%
+    if (storageBar) {
+      storageBar.style.backgroundColor = percent > 90 ? "#f44336" : "#2196F3";
+    }
+  }
 
   // --- Site Management ---
   async function loadSites() {
@@ -71,7 +97,10 @@ document.addEventListener("DOMContentLoaded", () => {
     editorPanel.classList.add("hidden");
     deployStatus.textContent = "Loading...";
     currentFiles = typeof getSiteFiles === "function" ? await getSiteFiles(currentUser.uid, site.siteId) : [];
+    
     renderFileTree();
+    updateStorageUI();
+    
     deployBtn.disabled = false;
     deployStatus.textContent = "";
     document.getElementById("site-title").textContent = site.name;
@@ -82,6 +111,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Persistence Logic ---
   async function saveCurrentWebsite() {
     if (!currentSite || !currentUser) return false;
+    updateStorageUI();
     if (typeof saveSiteFiles === "function") {
       await saveSiteFiles(currentUser.uid, currentSite.siteId, currentFiles);
       return true;
@@ -120,7 +150,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // --- Icon Settings Logic ---
+  // --- Icon Logic ---
   iconInput.onchange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -133,7 +163,7 @@ document.addEventListener("DOMContentLoaded", () => {
         contentType: file.type
       };
       saveIconBtn.disabled = false;
-      iconStatus.textContent = `Ready to save: ${file.name}`;
+      iconStatus.textContent = `Selected: ${file.name} (Click Save)`;
     };
     reader.readAsDataURL(file);
   };
@@ -141,13 +171,13 @@ document.addEventListener("DOMContentLoaded", () => {
   saveIconBtn.onclick = async () => {
     if (!pendingIcon || !currentSite) return;
 
-    // Filter out existing icon and add the new one
+    // Remove existing favicon.ico if it exists and add the new one
     currentFiles = currentFiles.filter(f => f.path !== "favicon.ico");
     currentFiles.push(pendingIcon);
 
     if (await saveCurrentWebsite()) {
       saveIconBtn.disabled = true;
-      iconStatus.textContent = "Icon updated! It will be live after your next deploy.";
+      iconStatus.textContent = "Icon saved! Deploy to publish.";
       clearIconBtn.style.display = "inline-block";
       pendingIcon = null;
       renderFileTree();
@@ -155,14 +185,14 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   clearIconBtn.onclick = async () => {
-    if (!confirm("Are you sure you want to remove the website icon and revert to the browser default?")) return;
-
-    currentFiles = currentFiles.filter(f => f.path !== "favicon.ico");
-    if (await saveCurrentWebsite()) {
-      clearIconBtn.style.display = "none";
-      iconStatus.textContent = "Icon removed. Deploy to apply changes.";
-      iconInput.value = "";
-      renderFileTree();
+    if (confirm("Reset to browser default icon?")) {
+      currentFiles = currentFiles.filter(f => f.path !== "favicon.ico");
+      if (await saveCurrentWebsite()) {
+        clearIconBtn.style.display = "none";
+        iconStatus.textContent = "Icon cleared. Reverted to default.";
+        iconInput.value = "";
+        renderFileTree();
+      }
     }
   };
 
@@ -173,9 +203,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!rightClickedItem || !currentSite) return;
     const { path, isFile } = rightClickedItem;
 
-    // Prevention: Cannot rename favicon.ico as it breaks the deployment logic
     if (path === "favicon.ico") {
-      alert("The website icon (favicon.ico) cannot be renamed.");
+      alert("The website icon cannot be renamed.");
       return;
     }
 
@@ -207,9 +236,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!rightClickedItem || !currentSite) return;
     const { path, isFile } = rightClickedItem;
     
-    // REQUIREMENT: Must use Settings to delete favicon.ico
+    // User must use the "Clear Icon" button in settings to remove the favicon
     if (path === "favicon.ico") {
-      alert("To delete the website icon, please use the 'Clear Icon' button in the Site Settings modal.");
+      alert("To delete the icon, please use the 'Clear Icon' button in Site Settings.");
       return;
     }
 
@@ -271,7 +300,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const uploadPromises = files.map((f, i) => {
       return new Promise((resolve) => {
         const reader = new FileReader();
-
         reader.onload = async (e) => {
           const content = e.target.result;
           const relPath = f.webkitRelativePath || f.name;
@@ -286,12 +314,10 @@ document.addEventListener("DOMContentLoaded", () => {
           const percent = ((i + 1) / files.length) * 100;
           progressBar.style.width = percent + "%";
           progressBar.textContent = Math.round(percent) + "%";
-          
           resolve();
         };
 
-        const isImage = f.type.startsWith("image/");
-        if (isImage) {
+        if (f.type.startsWith("image/")) {
           reader.readAsDataURL(f);
         } else {
           reader.readAsText(f);
@@ -345,9 +371,9 @@ document.addEventListener("DOMContentLoaded", () => {
       li.setAttribute("draggable", "true");
 
       if (item.__isFile) {
-        // Special styling for favicon.ico
         if (fullPath === "favicon.ico") {
-          li.style.color = "#888"; // Grayed out
+          // Grayed out styling with (ico) italic label
+          li.style.color = "#888";
           li.innerHTML = `<i style="font-size: 0.9em; margin-right: 5px;">(ico)</i> ${name}`;
         } else {
           li.textContent = name;
@@ -359,10 +385,15 @@ document.addEventListener("DOMContentLoaded", () => {
         renderTree(item.children, ul, onFileClick, fullPath);
         li.appendChild(ul);
 
-        li.ondragover = (e) => { e.preventDefault(); e.stopPropagation(); li.classList.add("drag-over"); };
+        li.ondragover = (e) => { 
+          e.preventDefault(); 
+          e.stopPropagation(); 
+          li.classList.add("drag-over"); 
+        };
         li.ondragleave = () => li.classList.remove("drag-over");
         li.ondrop = (e) => {
-          e.preventDefault(); e.stopPropagation();
+          e.preventDefault();
+          e.stopPropagation();
           li.classList.remove("drag-over");
           const data = JSON.parse(e.dataTransfer.getData("application/json"));
           if (fullPath.startsWith(data.path)) return alert("Cannot move folder into itself.");
@@ -390,7 +421,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // --- Deployment & Modal Controls ---
+  // --- Deployment & Settings ---
   deployBtn.onclick = async () => {
     deployBtn.disabled = true;
     deployStatus.textContent = "Deploying...";
@@ -405,7 +436,10 @@ document.addEventListener("DOMContentLoaded", () => {
     settingsModal.style.display = "block"; 
     renameSlugInput.value = currentSite.customSlug || ""; 
     
-    // Check for existing icon to toggle "Clear" button
+    // Update Storage UI in settings
+    updateStorageUI();
+
+    // Check if favicon exists to toggle "Clear" button
     const hasIcon = currentFiles.some(f => f.path === "favicon.ico");
     clearIconBtn.style.display = hasIcon ? "inline-block" : "none";
     iconStatus.textContent = hasIcon ? "Current icon: favicon.ico" : "No custom icon set.";
@@ -415,6 +449,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   closeModal.onclick = () => {
     settingsModal.style.display = "none";
-    pendingIcon = null; // Reset pending state on close
+    pendingIcon = null;
   };
 });
