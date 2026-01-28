@@ -141,7 +141,15 @@
         <button id="save-icon-btn" disabled style="padding: 8px; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 4px;">Save Icon</button>
       </div>
     </div>
-
+<div style="margin-bottom: 20px; border-top: 1px solid #eee; padding-top: 15px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+    <label><strong>Storage Usage</strong></label>
+    <small id="storage-text" style="color: #666;">0 / 1 MiB</small>
+  </div>
+  <div id="storage-container" style="width: 100%; background: #eee; height: 12px; border-radius: 6px; overflow: hidden; cursor: help;" title="Delete large files to free up space">
+    <div id="storage-bar" style="width: 0%; height: 100%; background: #2196F3; transition: width 0.3s;"></div>
+  </div>
+</div>
     <div class="danger-zone">
       <h4 style="color: red; margin-top: 0;">Danger Zone</h4>
       <button id="delete-site-btn" style="background-color: #f44336; color: white; border: none; padding: 8px 12px; cursor: pointer; width: 100%;">Delete Site Record</button>
