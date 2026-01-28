@@ -156,5 +156,33 @@
     </div>
   </div>
 </div>
+  <script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const auth = firebase.auth();
+    const logoutBtn = document.getElementById("logout-btn");
+    const userEmailSpan = document.getElementById("user-email");
+
+    // Show logged-in user email
+    auth.onAuthStateChanged(user => {
+      if (!user) {
+        window.location.href = "index.html";
+        return;
+      }
+      userEmailSpan.textContent = user.email;
+    });
+
+    // Fully working logout
+    logoutBtn.addEventListener("click", async () => {
+      try {
+        await auth.signOut();
+        window.location.href = "index.html";
+      } catch (err) {
+        console.error("Logout error:", err);
+        alert("Failed to sign out. Check console for details.");
+      }
+    });
+  });
+</script>
+
 </body>
 </html>
