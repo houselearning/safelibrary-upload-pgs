@@ -68,7 +68,8 @@ if (newSiteBtn) {
     try {
       // 1. Save to database (Assuming your helper function exists)
       if (typeof createSite === "function") {
-        await createSite(currentUser.uid, newSiteData);
+      // Change this line in your dashboard.js:
+      await createSite(currentUser.uid, siteName.trim());
       } else {
         console.warn("createSite function not found. Site saved locally only.");
       }
