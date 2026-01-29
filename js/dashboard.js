@@ -44,6 +44,48 @@ document.addEventListener("DOMContentLoaded", () => {
   let pendingIcon = null;
   const STORAGE_LIMIT_MIB = 1;
   const STORAGE_LIMIT_BYTES = STORAGE_LIMIT_MIB * 1024 * 1024;
+  
+  if (newFolderBtn) {
+  newFolderBtn.onclick = async () => {
+    if (!currentSite) {
+      alert("Please select a site first.");
+      return;
+    }
+
+    const folderName = prompt("Enter folder name:");
+    if (!folderName || folderName.trim() === "") return;
+
+    // Sanitize the folder name
+    const cleanFolderName = folderName.trim().replace(/[<>:"/\\|?*]/g, "");
+
+    // In a flat array system, a folder "exists" if a file path contains it.
+    // We create a hidden '.keep' file so the folder shows up even if empty.
+    const placeholderPath = `${cleanFolderName}/.keep`;
+
+    // Check if it already exists
+    if (currentFiles.some(f => f.path.startsWith(cleanFolderName + "/"))) {
+      alert("A folder or file with this name already exists.");
+      return;
+    }
+
+    const newFolderPlaceholder = {
+      path: placeholderPath,
+      content: "",
+      contentType: "text/plain"
+    };
+
+    currentFiles.push(newFolderPlaceholder);
+
+    // Save and Refresh UI
+    deployStatus.textContent = "Creating folder...";
+    if (await saveCurrentWebsite()) {
+      renderFileTree();
+      deployStatus.textContent = "Folder created.";
+    } else {
+      deployStatus.textContent = "Failed to create folder.";
+    }
+  };
+}
   // --- Site Creation Button ---
 const newSiteBtn = document.getElementById("create-site-btn");
 
