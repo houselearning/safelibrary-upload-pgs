@@ -44,7 +44,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let pendingIcon = null;
   const STORAGE_LIMIT_MIB = 1;
   const STORAGE_LIMIT_BYTES = STORAGE_LIMIT_MIB * 1024 * 1024;
-  
+  /*
   if (newFolderBtn) {
   newFolderBtn.onclick = async () => {
     if (!currentSite) {
@@ -85,7 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
       deployStatus.textContent = "Failed to create folder.";
     }
   };
-}
+}*/
   // --- Site Creation Button ---
 const newSiteBtn = document.getElementById("create-site-btn");
 
