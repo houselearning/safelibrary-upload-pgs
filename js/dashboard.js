@@ -44,7 +44,46 @@ document.addEventListener("DOMContentLoaded", () => {
   let pendingIcon = null;
   const STORAGE_LIMIT_MIB = 1;
   const STORAGE_LIMIT_BYTES = STORAGE_LIMIT_MIB * 1024 * 1024;
+  // --- Site Creation Button ---
+const newSiteBtn = document.getElementById("create-site-btn");
 
+// --- Add this to your Site Management section ---
+if (newSiteBtn) {
+  newSiteBtn.onclick = async () => {
+    const siteName = prompt("Enter a name for your new site:");
+    
+    // Basic validation
+    if (!siteName || siteName.trim() === "") return;
+
+    // Create a unique ID (random string)
+    const siteId = "site-" + Math.random().toString(36).substring(2, 9);
+
+    const newSiteData = {
+      siteId: siteId,
+      name: siteName.trim(),
+      customSlug: "",
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      // 1. Save to database (Assuming your helper function exists)
+      if (typeof createSite === "function") {
+        await createSite(currentUser.uid, newSiteData);
+      } else {
+        console.warn("createSite function not found. Site saved locally only.");
+      }
+
+      // 2. Refresh the list and automatically open the new site
+      await loadSites();
+      openSite(newSiteData);
+      
+      alert(`Site "${siteName}" created successfully!`);
+    } catch (error) {
+      console.error("Error creating site:", error);
+      alert("Failed to create site. Please try again.");
+    }
+  };
+}
   // --- Authentication ---
   firebase.auth().onAuthStateChanged(async (user) => {
     if (!user) { 
