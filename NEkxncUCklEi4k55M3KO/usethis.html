@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>BlueNebula</title>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: linear-gradient(135deg,#020817,#0b1e3a);
+  color: white;
+  text-align: center;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+}
+
+.logo {
+  font-size: 48px;
+  font-weight: bold;
+}
+
+#discordBtn {
+  background: none;
+  border: none;
+  color: #7289da;
+  cursor: pointer;
+}
+
+.url-bar {
+  margin-top: 15px;
+  display: flex;
+  justify-content: center;
+}
+
+.url-bar input {
+  width: 50%;
+  padding: 10px;
+  font-size: 16px;
+  border-radius: 6px 0 0 6px;
+  border: none;
+  outline: none;
+}
+
+.url-bar button {
+  padding: 10px 15px;
+  font-size: 16px;
+  border: none;
+  background: #162a4f;
+  color: white;
+  cursor: pointer;
+}
+
+#fullscreenBtn {
+  border-radius: 0 6px 6px 0;
+}
+
+iframe {
+  margin-top: 20px;
+  width: 95%;
+  height: 70vh;
+  border: none;
+  border-radius: 8px;
+  background: white;
+}
+
+.controls {
+  margin-top: 15px;
+}
+
+select, .applyBtn {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: none;
+}
+
+.applyBtn {
+  background: #162a4f;
+  color: white;
+  cursor: pointer;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="logo">BlueNebula</div>
+  <button id="discordBtn">
+    <i data-lucide="discord"></i>
+  </button>
+</header>
+
+<div class="url-bar">
+  <input type="text" id="urlInput" placeholder="Enter URL here">
+  <button id="goBtn">Go</button>
+  <button id="fullscreenBtn">⛶</button>
+</div>
+
+<iframe id="browserFrame" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
+
+<div class="controls">
+  <select id="methodSelect">
+    <option value="proxy">BlueNebula Proxy</option>
+    <option value="urlfinder">UrlFinder Method</option>
+  </select>
+  <button class="applyBtn" id="applyBtn">Apply</button>
+</div>
+
+<script>
+const BACKEND_URL = "https://bnserverofficial.netlify.app/.netlify/functions/hello";
+const DISCORD_URL = "https://discord.com/invite/ybvUQVXdFU";
+
+const iframe = document.getElementById("browserFrame");
+const urlInput = document.getElementById("urlInput");
+const methodSelect = document.getElementById("methodSelect");
+
+let currentMethod = "proxy";
+
+lucide.createIcons();
+
+function normalizeURL(input) {
+  input = input.trim();
+
+  if (input.startsWith("http://") || input.startsWith("https://")) {
+    return input;
+  }
+
+  if (input.includes(".")) {
+    return "https://" + input;
+  }
+
+  return "https://www.bing.com/search?q=" + encodeURIComponent(input);
+}
+
+async function loadURL() {
+  let input = urlInput.value.trim();
+  if (!input) return;
+
+  if (input === "/discord") {
+    window.open(DISCORD_URL, "_blank");
+    return;
+  }
+
+  const finalURL = normalizeURL(input);
+
+  if (currentMethod === "proxy") {
+    iframe.removeAttribute("srcdoc");
+    iframe.src = BACKEND_URL + "?url=" + encodeURIComponent(finalURL);
+  }
+
+  if (currentMethod === "urlfinder") {
+    try {
+      const response = await fetch(finalURL);
+      let text = await response.text();
+
+      text = text.replace(/<head>/i, '<head><base href="' + finalURL + '">');
+
+      const blob = new Blob([text], { type: "text/html" });
+      const blobUrl = URL.createObjectURL(blob);
+
+      iframe.src = blobUrl;
+
+    } catch (error) {
+      iframe.srcdoc = "<h2 style='color:white;background:#020817;padding-top:50px;font-family:Arial;'>Error loading page</h2>";
+    }
+  }
+}
+
+document.getElementById("goBtn").addEventListener("click", loadURL);
+
+document.getElementById("applyBtn").addEventListener("click", () => {
+  currentMethod = methodSelect.value;
+  loadURL();
+});
+
+document.getElementById("fullscreenBtn").addEventListener("click", () => {
+  if (!document.fullscreenElement) {
+    iframe.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen();
+  }
+});
+
+document.getElementById("discordBtn").addEventListener("click", () => {
+  window.open(DISCORD_URL, "_blank");
+});
+</script>
+
+</body>
+</html>
